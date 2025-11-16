@@ -1,0 +1,19 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+pydantic-settings
+python-multipart
+openpyxl
+python-jose[cryptography]
+passlib[bcrypt]
+
+# SQL Server数据库驱动（二选一）
+# 方式1：使用pyodbc（推荐，需要安装ODBC驱动）
+# 注意：Python 3.13需要使用最新版本或预编译wheel
+# 如果安装失败，尝试：pip install pyodbc --only-binary :all:
+pyodbc>=5.0.1
+
+# 方式2：使用pymssql（不需要ODBC驱动，但功能较少）
+# pymssql==2.2.11
+

@@ -1,0 +1,46 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: his-interface-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # 挂载配置文件（可选，如果使用环境变量则不需要）
+      - ./backend/config.ini:/app/backend/config.ini:ro
+      # 挂载上传目录（持久化）
+      - ./uploads:/app/uploads
+    environment:
+      # 数据库配置（如果使用环境变量，取消下面的注释并修改）
+       DATABASE_URL: "mssql+pyodbc://sa:Chnyo.com@2018@192.168.1.198:1433/HIS_Interface?driver=ODBC+Driver+18+for+SQL+Server"
+      # 或者使用配置文件（推荐）
+      - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING=utf-8
+    networks:
+      - his-network
+    # 健康检查（使用 Python 检查，因为容器中已安装 Python）
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: his-interface-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - his-network
+
+networks:
+  his-network:
+    driver: bridge

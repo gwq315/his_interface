@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+# 保留.vscode/settings.json以便团队共享终端配置
+.vscode/*
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# 数据文件
+data/
+*.xlsx
+*.json
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# 前端构建
+frontend/dist/
+frontend/.vite/
+
+# 环境变量
+.env
+.env.local
+
+# 配置文件（包含敏感信息）
+backend/config.ini
+
+# 上传文件（用户上传的文档和附件）
+uploads/
+!uploads/.gitkeep
+
+# 日志文件
+*.log
+logs/
+

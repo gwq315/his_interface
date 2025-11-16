@@ -1,0 +1,66 @@
+# 后端 Dockerfile
+# 基于 Ubuntu 24.04，安装 ODBC 驱动和 Python 依赖
+
+FROM ubuntu:24.04
+
+# 设置环境变量
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    python3.12 \
+    python3-pip \
+    curl \
+    gnupg \
+    unixodbc \
+    unixodbc-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 Microsoft ODBC Driver 18 for SQL Server
+RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && curl https://packages.microsoft.com/config/ubuntu/24.04/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 验证 ODBC 驱动安装
+RUN odbcinst -q -d
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制 requirements.txt 并安装 Python 依赖
+COPY backend/requirements.txt /app/requirements.txt
+#RUN pip3 install --no-cache-dir -r requirements.txt
+
+# 步骤 1: 安装 Python 虚拟环境工具 (如果基础镜像中没有)
+RUN apt-get update && apt-get install -y python3-venv
+
+# 步骤 2: 创建虚拟环境
+RUN python3 -m venv /venv
+
+# 步骤 3: 激活虚拟环境并运行 pip install
+# 注意：我们使用 /venv/bin/pip 而不是全局的 pip3
+ENV PATH="/venv/bin:$PATH"
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制后端代码
+COPY backend/ /app/backend/
+
+# 创建上传目录（如果不存在，确保目录存在）
+RUN mkdir -p /app/uploads/projects
+
+# 设置 Python 路径
+ENV PYTHONPATH=/app
+
+# 暴露端口
+EXPOSE 8000
+
+# 启动命令
+# 注意：Uvicorn 本身不限制文件大小，但如果有 Nginx 在前面，需要在 Nginx 中配置 client_max_body_size
+# --timeout-keep-alive 和 --limit-concurrency 用于优化大文件上传性能
+CMD ["python3", "-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "300"]

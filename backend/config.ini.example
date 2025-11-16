@@ -1,0 +1,41 @@
+[Database]
+# SQL Server数据库配置示例文件
+# 复制此文件为config.ini并修改相应配置
+
+# 数据库类型：mssql+pyodbc 或 mssql+pymssql
+# pyodbc需要安装ODBC驱动，pymssql不需要
+driver = mssql+pyodbc
+
+# 数据库服务器地址（IP或主机名）
+# Docker 部署时，请填写 Windows 主机的实际 IP 地址（例如：192.168.1.100）
+# 不要使用 localhost，因为容器内的 localhost 指向容器本身
+server = localhost
+
+# 数据库端口（默认1433）
+port = 1433
+
+# 数据库名称
+database = HIS_Interface
+
+# 数据库用户名
+username = sa
+
+# 数据库密码
+password = YourPassword123
+
+# ODBC驱动名称（使用pyodbc时必需）
+# 常见驱动名称：
+# - ODBC Driver 18 for SQL Server（Docker 部署推荐）
+# - ODBC Driver 17 for SQL Server（Windows 本地推荐）
+# - ODBC Driver 13 for SQL Server
+# - SQL Server Native Client 11.0
+# 注意：Docker 容器中安装的是 ODBC Driver 18，请使用 "ODBC Driver 18 for SQL Server"
+odbc_driver = ODBC Driver 17 for SQL Server
+
+# 连接超时时间（秒）
+timeout = 30
+
+# 是否使用Windows身份验证（True/False）
+# 如果为True，则忽略username和password
+use_windows_auth = False
+

@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# 文档
+*.md
+!README.md
+
+# 配置文件（敏感信息）
+backend/config.ini
+*.ini
+!backend/config.ini.example
+
+# 日志
+*.log
+
+# 临时文件
+*.tmp
+*.bak
+*.cache
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 其他
+.env
+.env.local
+
