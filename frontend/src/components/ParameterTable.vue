@@ -151,8 +151,6 @@ const initParams = () => {
   isUpdatingFromProps.value = true
   params.value = initialValue.length > 0 ? initialValue.map(p => ({ ...p })) : []
   isUpdatingFromProps.value = false
-  console.log(`ParameterTable (${props.paramType}): Initialized with`, params.value.length, 'items')
-  console.log(`ParameterTable (${props.paramType}): Data:`, params.value)
 }
 
 // 监听props变化，更新本地数据
@@ -171,12 +169,9 @@ watch(() => props.modelValue, (newVal, oldVal) => {
     return
   }
   
-  console.log(`ParameterTable (${props.paramType}): modelValue changed, new length:`, newLength, 'current length:', currentLength, 'reference changed:', referenceChanged)
-  
   // 更新本地数据
   if (newVal && Array.isArray(newVal) && newVal.length > 0) {
     params.value = newVal.map(p => ({ ...p }))
-    console.log(`ParameterTable (${props.paramType}): Updated params:`, params.value.length, 'items')
   } else {
     params.value = []
   }

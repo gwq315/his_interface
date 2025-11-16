@@ -219,8 +219,6 @@ const loadInterface = async () => {
     }
 
     const data = await interfaceApi.getById(interfaceId)
-    console.log('InterfaceForm: API response data:', data)
-    console.log('InterfaceForm: Parameters from API:', data.parameters)
 
     form.project_id = data.project?.id || data.project_id
     form.code = data.code
@@ -239,7 +237,6 @@ const loadInterface = async () => {
 
     // 分离入参和出参 - 确保正确处理数据
     const parameters = data.parameters || []
-    console.log('InterfaceForm: Total parameters:', parameters.length)
 
     // 清空现有参数
     form.parameters.input = []
@@ -287,14 +284,7 @@ const loadInterface = async () => {
 
     // 再次等待 DOM 更新
     await nextTick()
-
-    console.log('InterfaceForm: Processed input parameters:', form.parameters.input.length, 'items')
-    console.log('InterfaceForm: Processed output parameters:', form.parameters.output.length, 'items')
-    console.log('InterfaceForm: Form parameters object:', form.parameters)
   } catch (error) {
-    console.error('Load interface error details:', error)
-    console.error('Error response:', error.response)
-    console.error('Error message:', error.message)
     const errorMsg = error.response?.data?.detail || error.message || '加载失败'
     ElMessage.error(errorMsg)
     // 不要立即返回，让用户看到错误信息
@@ -373,12 +363,12 @@ const handleSubmit = async () => {
       ]
     }
 
-    console.log('InterfaceForm: Submitting data:', {
+    const finalData = {
       ...submitData,
       parameters_count: submitData.parameters.length,
       input_count: form.parameters.input.length,
       output_count: form.parameters.output.length
-    })
+    }
 
     if (isEdit.value) {
       const interfaceId = route.params.id
@@ -386,18 +376,13 @@ const handleSubmit = async () => {
         ElMessage.error('接口ID不存在')
         return
       }
-      await interfaceApi.update(interfaceId, submitData)
+      await interfaceApi.update(interfaceId, finalData)
       ElMessage.success('更新成功')
     } else {
       try {
-        await interfaceApi.create(submitData)
+        await interfaceApi.create(finalData)
         ElMessage.success('创建成功')
       } catch (error) {
-        // 详细记录错误信息
-        console.error('Create interface error:', error)
-        console.error('Error response:', error.response)
-        console.error('Error data:', error.response?.data)
-        
         // 处理 FastAPI 验证错误和业务逻辑错误
         let errorMessage = '创建失败'
         if (error.response?.data) {

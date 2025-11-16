@@ -21,39 +21,110 @@
       <el-button type="success" @click="openCreate">新建文档</el-button>
     </div>
 
-    <el-table :data="items" v-loading="loading" size="small" border>
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="title" label="标题" min-width="200" />
-      <el-table-column prop="description" label="简要描述" min-width="200" show-overflow-tooltip />
-      <el-table-column prop="region" label="地区" width="120" />
-      <el-table-column prop="person" label="人员" width="120" />
-      <el-table-column label="类型" width="80">
-        <template #default="{ row }">
-          <el-tag :type="row.document_type === 'pdf' ? 'primary' : 'success'">
-            {{ row.document_type === 'pdf' ? 'PDF' : '图片' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="file_name" label="文件名" min-width="200" show-overflow-tooltip />
-      <el-table-column prop="created_at" label="创建时间" width="180" />
-      <el-table-column label="操作" width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="previewDocument(row)">预览</el-button>
-          <el-button link type="warning" @click="openEdit(row)">编辑</el-button>
-          <el-button link type="danger" @click="handleDelete(row)" :loading="row._deleting">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="content-layout">
+      <!-- 左侧文档列表 -->
+      <div class="left-panel">
+        <div class="list-header">
+          <span>文档列表</span>
+          <span class="total-count">共 {{ total }} 条</span>
+        </div>
+        <div class="list-content" v-loading="loading">
+          <div 
+            v-for="item in items" 
+            :key="item.id"
+            class="list-item"
+            :class="{ active: selectedDocument?.id === item.id }"
+            @click="selectDocument(item)"
+            @contextmenu.prevent="handleContextMenu($event, item)"
+          >
+            <div class="item-header">
+              <el-tag 
+                :type="item.document_type === 'pdf' ? 'primary' : 'success'" 
+                size="small"
+                style="margin-right: 8px;"
+              >
+                {{ item.document_type === 'pdf' ? 'PDF' : '图片' }}
+              </el-tag>
+              <span class="item-title">{{ item.title }}</span>
+            </div>
+            <div class="item-description" v-if="item.description">
+              {{ item.description }}
+            </div>
+            <div class="item-actions" @click.stop>
+              <el-dropdown trigger="click" @command="handleCommand">
+                <el-button link type="primary" size="small">
+                  <el-icon><MoreFilled /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item :command="{ action: 'edit', item }">编辑</el-dropdown-item>
+                    <el-dropdown-item :command="{ action: 'delete', item }" divided>删除</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
+          <el-empty v-if="!loading && items.length === 0" description="暂无文档" :image-size="100" />
+        </div>
+        <div class="list-footer">
+          <el-pagination
+            background
+            layout="prev, pager, next"
+            :total="total"
+            :page-size="pageSize"
+            :current-page="page"
+            small
+            @current-change="p => { page = p; loadData(); }"
+          />
+        </div>
+      </div>
 
-    <div class="pager">
-      <el-pagination
-        background
-        layout="prev, pager, next, ->, total"
-        :total="total"
-        :page-size="pageSize"
-        :current-page="page"
-        @current-change="p => { page = p; loadData(); }"
-      />
+      <!-- 右侧预览区域 -->
+      <div class="right-panel">
+        <div v-if="selectedDocument" class="preview-content">
+          <div class="preview-header">
+            <div class="preview-title">
+              <h3>{{ selectedDocument.title }}</h3>
+              <div class="preview-meta">
+                <el-tag :type="selectedDocument.document_type === 'pdf' ? 'primary' : 'success'" size="small">
+                  {{ selectedDocument.document_type === 'pdf' ? 'PDF' : '图片' }}
+                </el-tag>
+                <span class="meta-item" v-if="selectedDocument.region">地区：{{ selectedDocument.region }}</span>
+                <span class="meta-item" v-if="selectedDocument.person">人员：{{ selectedDocument.person }}</span>
+                <span class="meta-item">创建时间：{{ formatDate(selectedDocument.created_at) }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="preview-body">
+            <div v-if="selectedDocument.document_type === 'pdf'" class="pdf-preview">
+              <iframe 
+                :src="getPreviewUrl(selectedDocument.file_path)" 
+                class="preview-iframe"
+              />
+            </div>
+            <div v-else class="image-preview">
+              <img 
+                :src="getPreviewUrl(selectedDocument.file_path)" 
+                class="preview-image"
+                alt="预览图片"
+                @error="handleImageError"
+                @load="handleImageLoad"
+              />
+              <div v-if="imageLoadError" class="error-message">
+                <el-icon><PictureFilled /></el-icon>
+                <p>图片加载失败，请检查文件是否存在或网络连接</p>
+              </div>
+            </div>
+            <div v-if="selectedDocument.description" class="preview-description">
+              <h4>简要描述</h4>
+              <p>{{ selectedDocument.description }}</p>
+            </div>
+          </div>
+        </div>
+        <div v-else class="preview-placeholder">
+          <el-empty description="请从左侧选择文档进行预览" :image-size="150" />
+        </div>
+      </div>
     </div>
 
     <!-- 新增/编辑对话框 -->
@@ -134,41 +205,13 @@
       </template>
     </el-dialog>
 
-    <!-- 预览对话框 -->
-    <el-dialog 
-      v-model="previewDialog.visible" 
-      :title="previewDialog.title" 
-      width="90%" 
-      :close-on-click-modal="false"
-    >
-      <div v-if="previewDialog.document" style="text-align: center;">
-        <div v-if="previewDialog.document.document_type === 'pdf'" style="height: 80vh;">
-          <iframe 
-            :src="getPreviewUrl(previewDialog.document.file_path)" 
-            style="width: 100%; height: 100%; border: none;"
-          />
-        </div>
-        <div v-else>
-          <img 
-            :src="getPreviewUrl(previewDialog.document.file_path)" 
-            style="max-width: 100%; max-height: 80vh;"
-            alt="预览图片"
-            @error="handleImageError"
-            @load="handleImageLoad"
-          />
-          <div v-if="imageLoadError" style="color: #f56c6c; margin-top: 20px;">
-            图片加载失败，请检查文件是否存在或网络连接
-          </div>
-        </div>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Upload, Document, Picture, DocumentCopy, Check } from '@element-plus/icons-vue'
+import { Upload, Document, Picture, DocumentCopy, Check, MoreFilled, PictureFilled } from '@element-plus/icons-vue'
 import { getDocuments, createDocument, updateDocument, deleteDocument, getDocumentPreviewUrl } from '../api/documents'
 
 const loading = ref(false)
@@ -200,12 +243,7 @@ const dialog = reactive({
   saving: false
 })
 
-const previewDialog = reactive({
-  visible: false,
-  title: '',
-  document: null
-})
-
+const selectedDocument = ref(null)
 const uploadRef = ref(null)
 
 // 加载数据
@@ -313,15 +351,25 @@ async function submit() {
   
   dialog.saving = true
   try {
+    let res
     if (dialog.isEdit) {
       // 更新
-      await updateDocument(form.id, {
+      res = await updateDocument(form.id, {
         title: form.title,
         description: form.description,
         region: form.region,
         person: form.person
       })
       ElMessage.success('更新成功')
+      // 更新选中的文档信息
+      if (selectedDocument.value && selectedDocument.value.id === form.id) {
+        Object.assign(selectedDocument.value, {
+          title: form.title,
+          description: form.description,
+          region: form.region,
+          person: form.person
+        })
+      }
     } else {
       // 创建
       const formData = new FormData()
@@ -337,12 +385,20 @@ async function submit() {
         formData.append('clipboard_data', form.clipboardData)
       }
       
-      await createDocument(formData)
+      res = await createDocument(formData)
       ElMessage.success('创建成功')
     }
     
     dialog.visible = false
-    loadData()
+    await loadData()
+    
+    // 如果是新建，选中新创建的文档
+    if (!dialog.isEdit && res) {
+      const newItem = items.value.find(item => item.id === res.id)
+      if (newItem) {
+        selectDocument(newItem)
+      }
+    }
   } catch (error) {
     ElMessage.error(error.message || '操作失败')
   } finally {
@@ -350,18 +406,37 @@ async function submit() {
   }
 }
 
-// 预览文档
-function previewDocument(row) {
-  previewDialog.visible = true
-  previewDialog.title = row.title
-  previewDialog.document = row
+// 选择文档
+function selectDocument(item) {
+  selectedDocument.value = item
   // 重置图片加载错误状态
   imageLoadError.value = false
 }
 
+// 处理右键菜单
+function handleContextMenu(event, item) {
+  // 可以在这里添加右键菜单功能
+}
+
+// 处理下拉菜单命令
+function handleCommand(command) {
+  const { action, item } = command
+  if (action === 'edit') {
+    openEdit(item)
+  } else if (action === 'delete') {
+    handleDelete(item)
+  }
+}
+
+// 格式化日期
+function formatDate(dateStr) {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN')
+}
+
 // 图片加载错误处理
 function handleImageError(event) {
-  console.error('图片加载失败:', event.target.src)
   imageLoadError.value = true
 }
 
@@ -385,7 +460,13 @@ async function handleDelete(row) {
     row._deleting = true
     await deleteDocument(row.id)
     ElMessage.success('删除成功')
-    loadData()
+    
+    // 如果删除的是当前选中的文档，清空选中
+    if (selectedDocument.value && selectedDocument.value.id === row.id) {
+      selectedDocument.value = null
+    }
+    
+    await loadData()
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error(error.message || '删除失败')
@@ -403,6 +484,9 @@ onMounted(() => {
 <style scoped>
 .page {
   padding: 20px;
+  height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
 }
 
 .toolbar {
@@ -410,12 +494,240 @@ onMounted(() => {
   gap: 12px;
   margin-bottom: 20px;
   align-items: center;
+  flex-shrink: 0;
 }
 
-.pager {
-  margin-top: 20px;
+.content-layout {
   display: flex;
-  justify-content: flex-end;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 左侧文档列表 */
+.left-panel {
+  width: 350px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.list-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #dcdfe6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f5f7fa;
+  font-weight: 500;
+}
+
+.total-count {
+  font-size: 12px;
+  color: #909399;
+}
+
+.list-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.list-item {
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+  background: #fff;
+}
+
+.list-item:hover {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.list-item.active {
+  border-color: #409eff;
+  background: #ecf5ff;
+  box-shadow: 0 2px 4px rgba(64, 158, 255, 0.2);
+}
+
+.item-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.item-title {
+  flex: 1;
+  font-weight: 500;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-description {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin-bottom: 4px;
+}
+
+.item-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.list-item:hover .item-actions {
+  opacity: 1;
+}
+
+.list-footer {
+  padding: 12px;
+  border-top: 1px solid #dcdfe6;
+  display: flex;
+  justify-content: center;
+  background: #f5f7fa;
+}
+
+/* 右侧预览区域 */
+.right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #fff;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.preview-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.preview-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #dcdfe6;
+  background: #f5f7fa;
+  flex-shrink: 0;
+}
+
+.preview-title h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: #303133;
+}
+
+.preview-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.meta-item {
+  font-size: 12px;
+  color: #909399;
+}
+
+.preview-body {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pdf-preview {
+  flex: 1;
+  min-height: 400px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.preview-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  min-height: 600px;
+}
+
+.image-preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.error-message {
+  text-align: center;
+  color: #f56c6c;
+  padding: 40px;
+}
+
+.error-message .el-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.preview-description {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e4e7ed;
+}
+
+.preview-description h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #606266;
+}
+
+.preview-description p {
+  margin: 0;
+  color: #303133;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.preview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #fafafa;
 }
 </style>
 

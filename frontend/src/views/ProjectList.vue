@@ -252,15 +252,6 @@ const getAttachmentUrl = (attachment) => {
   // 这样无论前端运行在哪个地址（localhost:5173 或 192.168.1.198:5173），都能正确访问
   const absoluteUrl = `${window.location.origin}${relativePath}`
   
-  // 调试：打印生成的URL
-  console.log('附件URL:', {
-    file_path: attachment.file_path,
-    file_url: attachment.file_url,
-    relativePath: relativePath,
-    currentOrigin: window.location.origin,
-    absoluteUrl: absoluteUrl
-  })
-  
   // 返回绝对URL，使用当前页面的origin（如 http://192.168.1.198:5173）
   return absoluteUrl
 }

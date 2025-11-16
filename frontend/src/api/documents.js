@@ -72,20 +72,15 @@ export function getDocumentPreviewUrl(filePath) {
   // 确保路径以/开头
   const relativePath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`
   
-  // 使用当前页面的origin构建绝对URL
-  const fullUrl = `${window.location.origin}${relativePath}`
-  
-  // 开发环境：打印调试信息
-  if (import.meta.env.DEV) {
-    console.log('文档预览URL生成:', {
-      filePath,
-      normalizedPath,
-      relativePath,
-      origin: window.location.origin,
-      fullUrl
-    })
+  // 使用URL构造函数正确处理路径编码（包括中文字符）
+  // 这样可以确保路径中的中文字符和特殊字符被正确编码
+  try {
+    const fullUrl = new URL(relativePath, window.location.origin)
+    const encodedPath = fullUrl.pathname + fullUrl.search + fullUrl.hash
+    return `${window.location.origin}${encodedPath}`
+  } catch (error) {
+    // 如果URL构造失败，使用简单拼接（浏览器会自动编码）
+    return `${window.location.origin}${relativePath}`
   }
-  
-  return fullUrl
 }
 

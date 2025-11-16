@@ -15,12 +15,14 @@ FastAPI应用入口模块
 创建时间: 2024
 """
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import FileResponse
 import sys
 from pathlib import Path
+import mimetypes
 
 # ========== 路径配置 ==========
 
@@ -97,7 +99,76 @@ app.include_router(documents.router)      # 文档/截图管理路由
 uploads_dir = project_root / "uploads"
 uploads_dir.mkdir(exist_ok=True)
 
-app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+# 自定义静态文件路由，确保图片文件返回正确的Content-Type
+@app.get("/uploads/{file_path:path}")
+async def serve_uploaded_file(file_path: str, request: Request = None):
+    """
+    提供上传文件的访问服务，确保图片文件返回正确的Content-Type
+    
+    这个路由优先于StaticFiles挂载，确保图片文件能正确显示
+    """
+    # 构建完整文件路径
+    # FastAPI会自动解码URL编码的路径参数，所以file_path已经是解码后的
+    # 但为了安全，我们需要确保路径是相对路径
+    if file_path.startswith('/'):
+        file_path = file_path[1:]  # 移除开头的斜杠
+    
+    full_path = uploads_dir / file_path
+    
+    # 安全检查：确保文件在uploads目录内（防止路径遍历攻击）
+    try:
+        full_path = full_path.resolve()
+        uploads_dir_resolved = uploads_dir.resolve()
+        if not str(full_path).startswith(str(uploads_dir_resolved)):
+            raise HTTPException(status_code=403, detail="访问被拒绝")
+    except (ValueError, OSError):
+        raise HTTPException(status_code=403, detail="无效的文件路径")
+    
+    # 检查文件是否存在
+    if not full_path.exists() or not full_path.is_file():
+        # 生产环境：提供更详细的错误信息用于调试
+        error_detail = f"文件不存在: {file_path}"
+        # 可选：在生产环境记录更详细的日志（可以通过环境变量控制）
+        import os
+        if os.getenv("DEBUG", "false").lower() == "true":
+            print(f"[文件服务] 文件不存在: {full_path}")
+            print(f"[文件服务] 目录是否存在: {full_path.parent.exists()}")
+            if full_path.parent.exists():
+                print(f"[文件服务] 目录内容: {list(full_path.parent.iterdir())}")
+        raise HTTPException(status_code=404, detail=error_detail)
+    
+    # 获取MIME类型
+    mime_type, _ = mimetypes.guess_type(str(full_path))
+    
+    # 对于图片文件，确保返回正确的MIME类型
+    if not mime_type:
+        ext = full_path.suffix.lower()
+        if ext == ".png":
+            mime_type = "image/png"
+        elif ext in [".jpg", ".jpeg"]:
+            mime_type = "image/jpeg"
+        elif ext == ".gif":
+            mime_type = "image/gif"
+        elif ext == ".webp":
+            mime_type = "image/webp"
+        elif ext == ".bmp":
+            mime_type = "image/bmp"
+        elif ext == ".pdf":
+            mime_type = "application/pdf"
+        else:
+            mime_type = "application/octet-stream"
+    
+    # 返回文件，确保设置正确的Content-Type
+    return FileResponse(
+        path=str(full_path),
+        media_type=mime_type,
+        headers={
+            "Cache-Control": "public, max-age=3600"  # 缓存1小时
+        }
+    )
+
+# 注意：我们使用自定义路由而不是StaticFiles挂载
+# 这样可以确保图片文件返回正确的Content-Type，并且有更好的错误处理
 
 # ========== 根路径和健康检查 ==========
 

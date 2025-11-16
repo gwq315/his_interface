@@ -366,7 +366,6 @@ def upload_project_attachment(
     
     file_info["file_url"] = relative_url
     # 调试：打印保存的URL（确认是相对路径）
-    print(f"保存附件URL到数据库: {relative_url} (应该是相对路径，不以http开头)")
     
     # 更新项目的附件列表
     attachments = _ensure_list(db_project.attachments)
@@ -382,7 +381,6 @@ def upload_project_attachment(
     attachments.append(file_info_for_db)
     
     # 调试：打印即将保存到数据库的附件信息
-    print(f"即将保存到数据库的附件信息: {json.dumps(file_info_for_db, ensure_ascii=False, indent=2)}")
     
     # 使用update并手动json序列化，避免不同后端的JSON类型兼容问题
     # ensure_ascii=False 确保中文字符正确保存
