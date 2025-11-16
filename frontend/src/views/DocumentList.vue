@@ -73,7 +73,7 @@
             :total="total"
             :page-size="pageSize"
             :current-page="page"
-            small
+            size="small"
             @current-change="p => { page = p; loadData(); }"
           />
         </div>

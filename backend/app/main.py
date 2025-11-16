@@ -101,6 +101,7 @@ uploads_dir.mkdir(exist_ok=True)
 
 # 自定义静态文件路由，确保图片文件返回正确的Content-Type
 @app.get("/uploads/{file_path:path}")
+@app.head("/uploads/{file_path:path}")  # 支持 HEAD 请求（用于 curl -I）
 async def serve_uploaded_file(file_path: str, request: Request = None):
     """
     提供上传文件的访问服务，确保图片文件返回正确的Content-Type

@@ -237,7 +237,7 @@ const viewAttachments = (row) => {
 }
 
 const getAttachmentUrl = (attachment) => {
-  // 始终使用file_path构建URL，使用当前页面的origin确保使用正确的IP和端口
+  // 始终使用file_path构建URL，使用相对路径通过 nginx 代理访问
   // 不依赖file_url，因为数据库中可能存储了错误的绝对路径（旧数据）
   if (!attachment || !attachment.file_path) {
     console.error('附件数据无效:', attachment)
@@ -248,12 +248,9 @@ const getAttachmentUrl = (attachment) => {
   // 确保路径以/开头
   const relativePath = filePath.startsWith('/') ? filePath : `/${filePath}`
   
-  // 使用当前页面的origin构建绝对URL，确保使用正确的IP地址和端口
-  // 这样无论前端运行在哪个地址（localhost:5173 或 192.168.1.198:5173），都能正确访问
-  const absoluteUrl = `${window.location.origin}${relativePath}`
-  
-  // 返回绝对URL，使用当前页面的origin（如 http://192.168.1.198:5173）
-  return absoluteUrl
+  // 使用相对路径，通过 nginx 代理访问（生产环境）或 vite 代理访问（开发环境）
+  // 这样不需要知道具体的端口号，nginx/vite 会自动代理到后端
+  return relativePath
 }
 
 const formatFileSize = (bytes) => {

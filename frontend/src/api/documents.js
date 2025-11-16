@@ -60,8 +60,8 @@ export function deleteDocument(id) {
  * @param {string} filePath - 文件路径（相对路径）
  */
 export function getDocumentPreviewUrl(filePath) {
-  // 使用当前页面的origin构建URL，确保使用正确的IP地址和端口
-  // 这样无论前端运行在哪个地址（localhost:5173 或 192.168.1.198:5173），都能正确访问
+  // 使用相对路径，通过 nginx 代理访问（生产环境）或 vite 代理访问（开发环境）
+  // 这样不需要知道具体的端口号，nginx/vite 会自动代理到后端
   if (!filePath) {
     console.error('getDocumentPreviewUrl: filePath 为空')
     return '#'
@@ -72,15 +72,9 @@ export function getDocumentPreviewUrl(filePath) {
   // 确保路径以/开头
   const relativePath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`
   
-  // 使用URL构造函数正确处理路径编码（包括中文字符）
-  // 这样可以确保路径中的中文字符和特殊字符被正确编码
-  try {
-    const fullUrl = new URL(relativePath, window.location.origin)
-    const encodedPath = fullUrl.pathname + fullUrl.search + fullUrl.hash
-    return `${window.location.origin}${encodedPath}`
-  } catch (error) {
-    // 如果URL构造失败，使用简单拼接（浏览器会自动编码）
-    return `${window.location.origin}${relativePath}`
-  }
+  // 直接返回相对路径，浏览器会自动使用当前页面的协议、主机和端口
+  // 在生产环境中，nginx 会代理 /uploads 到后端
+  // 在开发环境中，vite 会代理 /uploads 到后端
+  return relativePath
 }
 
