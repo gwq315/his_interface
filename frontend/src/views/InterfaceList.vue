@@ -50,7 +50,7 @@
       </template>
 
       <el-table :data="interfaceList" v-loading="loading" stripe>
-        <el-table-column prop="code" label="接口编码" width="120" />
+        <el-table-column prop="code" label="接口编码" width="200" />
         <el-table-column prop="name" label="接口名称" min-width="180" />
         <el-table-column prop="interface_type" label="类型" width="90">
           <template #default="{ row }">
@@ -60,7 +60,7 @@
           </template>
         </el-table-column>
         <!-- <el-table-column prop="category" label="分类" width="120" /> -->
-        <el-table-column prop="url" label="URL" min-width="100" show-overflow-tooltip />
+        <el-table-column prop="url" label="URL" min-width="200" show-overflow-tooltip />
         <!-- <el-table-column prop="method" label="方法" width="80" /> -->
         <el-table-column prop="status" label="状态" width="70">
           <template #default="{ row }">

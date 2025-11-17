@@ -5,7 +5,7 @@
         v-model="searchForm.keyword" 
         placeholder="搜索标题或简要描述" 
         clearable 
-        style="max-width: 320px" 
+        style="max-width: 270px" 
         @keyup.enter="loadData"
       />
       <el-select 
@@ -483,7 +483,7 @@ onMounted(() => {
 
 <style scoped>
 .page {
-  padding: 20px;
+  padding: 1px;
   height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;

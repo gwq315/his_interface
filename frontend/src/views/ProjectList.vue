@@ -7,10 +7,10 @@
     </div>
 
     <el-table :data="items" v-loading="loading" size="small" border>
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="name" label="项目名称" min-width="180" />
-      <el-table-column prop="manager" label="负责人" width="140" />
-      <el-table-column prop="contact_info" label="联系方式" min-width="220" />
+      <el-table-column prop="id" label="ID" width="50" />
+      <el-table-column prop="name" label="项目名称" min-width="250" />
+      <el-table-column prop="manager" label="负责人" width="110" />
+      <el-table-column prop="contact_info" label="联系方式" min-width="120" />
       <el-table-column label="备注" width="100">
         <template #default="{ row }">
           {{ (row.documents && Array.isArray(row.documents) && row.documents.length > 0 && row.documents.find(doc => doc.name === '其他备注')) ? '有' : '无' }}
