@@ -59,14 +59,14 @@
           <el-input v-model="otherNotes" type="textarea" :rows="4" placeholder="请输入其他备注信息" />
         </el-form-item>
         
-        <!-- 附件上传（仅编辑时显示） -->
-        <el-form-item v-if="dialog.isEdit && form.id" label="附件">
+        <!-- PDF附件上传（仅编辑时显示） -->
+        <el-form-item v-if="dialog.isEdit && form.id" label="PDF附件">
           <el-upload
             ref="uploadRef"
-            :http-request="handleUpload"
+            :http-request="uploadPdfAttachment"
             :on-success="handleUploadSuccess"
             :on-error="handleUploadError"
-            :before-upload="beforeUpload"
+            :before-upload="beforePdfUpload"
             :show-file-list="false"
             accept=".pdf"
             :limit="10"
@@ -76,11 +76,36 @@
               <div class="el-upload__tip" style="color: #999; font-size: 12px; margin-top: 8px;">仅支持PDF格式，最大50MB</div>
             </template>
           </el-upload>
-          <div v-if="form.attachments && form.attachments.length > 0" style="margin-top: 12px;">
-            <div v-for="(att, idx) in form.attachments" :key="idx" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <div v-if="pdfAttachments.length > 0" class="attachment-list">
+            <div v-for="att in pdfAttachments" :key="att.stored_filename" class="attachment-row">
               <el-link :href="getAttachmentUrl(att)" target="_blank" type="primary">{{ att.filename }}</el-link>
               <span style="color: #999; font-size: 12px;">({{ formatFileSize(att.file_size) }})</span>
-              <el-button link type="danger" size="small" @click="handleDeleteAttachment(att, idx)">删除</el-button>
+              <el-button link type="danger" size="small" @click="handleDeleteAttachment(att)">删除</el-button>
+            </div>
+          </div>
+        </el-form-item>
+
+        <!-- 其他相关文件上传（仅编辑时显示） -->
+        <el-form-item v-if="dialog.isEdit && form.id" label="其他相关文件">
+          <el-upload
+            :http-request="uploadOtherAttachment"
+            :on-success="handleUploadSuccess"
+            :on-error="handleUploadError"
+            :before-upload="beforeOtherUpload"
+            :show-file-list="false"
+            multiple
+          >
+            <el-button type="primary" :icon="Upload">上传相关文件</el-button>
+            <template #tip>
+              <div class="el-upload__tip" style="color: #999; font-size: 12px; margin-top: 8px;">支持任意格式，最大50MB，上传后仅支持下载查看</div>
+            </template>
+          </el-upload>
+          <div v-if="otherAttachments.length > 0" class="attachment-list">
+            <div v-for="att in otherAttachments" :key="att.stored_filename" class="attachment-row">
+              <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ att.filename }}</span>
+              <span style="color: #999; font-size: 12px;">({{ formatFileSize(att.file_size) }})</span>
+              <el-button link type="primary" size="small" @click="downloadAttachment(att)">下载</el-button>
+              <el-button link type="danger" size="small" @click="handleDeleteAttachment(att)">删除</el-button>
             </div>
           </div>
         </el-form-item>
@@ -92,19 +117,47 @@
     </el-dialog>
 
     <!-- 附件查看对话框 -->
-    <el-dialog v-model="attachmentsDialog.visible" title="项目附件" width="700px">
-      <div v-if="attachmentsDialog.attachments && attachmentsDialog.attachments.length > 0">
-        <div v-for="(att, idx) in attachmentsDialog.attachments" :key="idx" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #e4e7ed; border-radius: 4px; margin-bottom: 12px;">
-          <el-icon style="font-size: 24px; color: #409eff;"><Document /></el-icon>
-          <div style="flex: 1;">
-            <el-link :href="getAttachmentUrl(att)" target="_blank" type="primary" style="font-size: 14px;">{{ att.filename }}</el-link>
-            <div style="color: #999; font-size: 12px; margin-top: 4px;">
-              {{ formatFileSize(att.file_size) }} · {{ formatDate(att.upload_time) }}
+    <el-dialog v-model="attachmentsDialog.visible" title="项目附件" width="720px">
+      <template v-if="attachmentsDialog.attachments && attachmentsDialog.attachments.length > 0">
+        <section class="attachment-section">
+          <h4>PDF附件（可预览）</h4>
+          <div v-if="dialogPdfAttachments.length > 0">
+            <div v-for="att in dialogPdfAttachments" :key="att.stored_filename" class="attachment-card">
+              <el-icon style="font-size: 24px; color: #409eff;"><Document /></el-icon>
+              <div style="flex: 1;">
+                <el-link :href="getAttachmentUrl(att)" target="_blank" type="primary" style="font-size: 14px;">{{ att.filename }}</el-link>
+                <div style="color: #999; font-size: 12px; margin-top: 4px;">
+                  {{ formatFileSize(att.file_size) }} · {{ formatDate(att.upload_time) }}
+                </div>
+              </div>
+              <el-button link type="danger" @click="handleDeleteAttachmentInDialog(att)">删除</el-button>
             </div>
           </div>
-          <el-button link type="danger" @click="handleDeleteAttachmentInDialog(att)">删除</el-button>
-        </div>
-      </div>
+          <el-empty v-else description="暂无PDF附件" />
+        </section>
+
+        <el-divider />
+
+        <section class="attachment-section">
+          <h4>其他相关文件（下载查看）</h4>
+          <div v-if="dialogOtherAttachments.length > 0">
+            <div v-for="att in dialogOtherAttachments" :key="att.stored_filename" class="attachment-card">
+              <el-icon style="font-size: 24px; color: #67c23a;"><Document /></el-icon>
+              <div style="flex: 1;">
+                <div style="font-size: 14px; font-weight: 500;">{{ att.filename }}</div>
+                <div style="color: #999; font-size: 12px; margin-top: 4px;">
+                  {{ formatFileSize(att.file_size) }} · {{ formatDate(att.upload_time) }}
+                </div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <el-button type="primary" link @click="downloadAttachment(att)">下载</el-button>
+                <el-button type="danger" link @click="handleDeleteAttachmentInDialog(att)">删除</el-button>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else description="暂无其他相关文件" />
+        </section>
+      </template>
       <el-empty v-else description="暂无附件" />
     </el-dialog>
   </div>
@@ -128,6 +181,23 @@ const form = ref({ id: null, name: '', manager: '', contact_info: '', descriptio
 const otherNotes = ref('')
 const uploadRef = ref()
 const attachmentsDialog = ref({ visible: false, attachments: [], projectId: null })
+const getAttachmentCategory = (attachment) => {
+  if (!attachment) return 'pdf'
+  if (attachment.category) return attachment.category
+  if (typeof attachment.can_preview === 'boolean') {
+    return attachment.can_preview ? 'pdf' : 'other'
+  }
+  return 'pdf'
+}
+
+const filterAttachments = (list, category) => {
+  return (list || []).filter(att => getAttachmentCategory(att) === category)
+}
+
+const pdfAttachments = computed(() => filterAttachments(form.value.attachments, 'pdf'))
+const otherAttachments = computed(() => filterAttachments(form.value.attachments, 'other'))
+const dialogPdfAttachments = computed(() => filterAttachments(attachmentsDialog.value.attachments, 'pdf'))
+const dialogOtherAttachments = computed(() => filterAttachments(attachmentsDialog.value.attachments, 'other'))
 
 const loadData = async () => {
   loading.value = true
@@ -267,14 +337,14 @@ const formatDate = (dateStr) => {
   return date.toLocaleString('zh-CN')
 }
 
-const beforeUpload = (file) => {
-  // 检查文件类型
-  const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-  if (!isPDF) {
-    ElMessage.error('仅支持PDF格式文件！')
-    return false
+const beforeUpload = (file, category = 'pdf') => {
+  if (category === 'pdf') {
+    const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    if (!isPDF) {
+      ElMessage.error('仅支持PDF格式文件！')
+      return false
+    }
   }
-  // 检查文件大小（50MB）
   const isLt50M = file.size / 1024 / 1024 < 50
   if (!isLt50M) {
     ElMessage.error('文件大小不能超过50MB！')
@@ -283,16 +353,21 @@ const beforeUpload = (file) => {
   return true
 }
 
-const handleUpload = async (options) => {
-  // 自定义上传方法
+const beforePdfUpload = (file) => beforeUpload(file, 'pdf')
+const beforeOtherUpload = (file) => beforeUpload(file, 'other')
+
+const handleUpload = async (options, category = 'pdf') => {
   const { file } = options
   try {
-    const response = await projectApi.uploadAttachment(form.value.id, file)
+    const response = await projectApi.uploadAttachment(form.value.id, file, category)
     return response
   } catch (error) {
     throw error
   }
 }
+
+const uploadPdfAttachment = (options) => handleUpload(options, 'pdf')
+const uploadOtherAttachment = (options) => handleUpload(options, 'other')
 
 const handleUploadSuccess = (response) => {
   ElMessage.success('附件上传成功')
@@ -316,15 +391,12 @@ const handleUploadError = (error) => {
   ElMessage.error('附件上传失败：' + (error.message || '未知错误'))
 }
 
-const handleDeleteAttachment = async (attachment, idx) => {
+const handleDeleteAttachment = async (attachment) => {
   try {
     await ElMessageBox.confirm(`确定要删除附件「${attachment.filename}」吗？`, '提示', { type: 'warning' })
     
     await projectApi.deleteAttachment(form.value.id, attachment.stored_filename)
     ElMessage.success('删除成功')
-    
-    // 从列表中移除
-    form.value.attachments.splice(idx, 1)
     
     // 重新加载项目数据
     const res = await projectApi.getById(form.value.id)
@@ -361,6 +433,20 @@ const handleDeleteAttachmentInDialog = async (attachment) => {
   }
 }
 
+const downloadAttachment = (attachment) => {
+  const url = getAttachmentUrl(attachment)
+  if (!url || url === '#') {
+    ElMessage.error('无法获取下载地址')
+    return
+  }
+  const link = document.createElement('a')
+  link.href = url
+  link.download = attachment.filename || attachment.stored_filename || '附件'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 const handleDelete = async (row) => {
   try {
     await ElMessageBox.confirm(`确认删除项目「${row.name}」？此操作不可恢复。`, '提示', { type: 'warning' })
@@ -384,6 +470,11 @@ const handleDelete = async (row) => {
 .page { padding: 16px; }
 .toolbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.attachment-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.attachment-row { display: flex; align-items: center; gap: 8px; }
+.attachment-section { margin-bottom: 16px; }
+.attachment-section h4 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.attachment-card { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #e4e7ed; border-radius: 4px; margin-bottom: 12px; }
 </style>
 
 

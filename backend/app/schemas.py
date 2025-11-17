@@ -43,6 +43,8 @@ class ProjectAttachment(BaseModel):
     file_path: str = Field(..., description="文件相对路径")
     file_size: int = Field(..., description="文件大小（字节）")
     upload_time: str = Field(..., description="上传时间（ISO格式）")
+    category: str = Field("pdf", description="附件类别：pdf（可预览）或 other（仅下载）")
+    can_preview: bool = Field(True, description="是否可以直接在线预览")
     
     class Config:
         from_attributes = True
@@ -54,7 +56,10 @@ class ProjectBase(BaseModel):
     manager: str = Field(..., description="负责人")
     contact_info: str = Field(..., description="联系方式（可存储多个联系方式，每行一个）")
     documents: Optional[List[Dict[str, Any]]] = Field(default=[], description="项目接口文档列表，每个文档包含：name（文档名称）、version（文档版本）、update_date（更新日期）")
-    attachments: Optional[List[Dict[str, Any]]] = Field(default=[], description="项目附件列表，每个附件包含：filename（原始文件名）、stored_filename（存储文件名）、file_path（文件路径）、file_size（文件大小）、upload_time（上传时间）")
+    attachments: Optional[List[Dict[str, Any]]] = Field(
+        default=[],
+        description="项目附件列表：支持 pdf（可预览）与 other（仅下载）两类，每个附件包含 filename/stored_filename/file_path/file_size/upload_time/category/can_preview 等信息"
+    )
     description: Optional[str] = Field(None, description="项目功能描述")
 
 

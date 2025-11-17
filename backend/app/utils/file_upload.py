@@ -7,13 +7,10 @@
 创建时间: 2024
 """
 
-import os
-import shutil
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from fastapi import UploadFile, HTTPException
-import json
 
 
 # 上传目录基础路径（相对于项目根目录）
@@ -21,7 +18,7 @@ UPLOAD_BASE_DIR = "uploads"
 PROJECT_UPLOAD_DIR = "uploads/projects"
 
 # 允许的文件类型
-ALLOWED_EXTENSIONS = {".pdf"}
+ALLOWED_PDF_EXTENSIONS = {".pdf"}
 
 # 最大文件大小（50MB）
 MAX_FILE_SIZE = 50 * 1024 * 1024
@@ -43,7 +40,7 @@ def ensure_upload_dir(project_id: int) -> Path:
     return upload_dir
 
 
-def validate_file(file: UploadFile) -> None:
+def validate_file(file: UploadFile, category: str = "pdf") -> None:
     """
     验证上传文件
     
@@ -55,10 +52,23 @@ def validate_file(file: UploadFile) -> None:
     """
     # 检查文件扩展名
     file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in ALLOWED_EXTENSIONS:
+    if category == "pdf":
+        if file_ext not in ALLOWED_PDF_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="不支持的文件类型。仅支持PDF文件（.pdf）"
+            )
+    elif category == "other":
+        # 其他相关文件允许任意扩展名，但仍需提供扩展名
+        if not file_ext:
+            raise HTTPException(
+                status_code=400,
+                detail="文件需要包含扩展名，以便识别文件类型"
+            )
+    else:
         raise HTTPException(
             status_code=400,
-            detail=f"不支持的文件类型。仅支持PDF文件（.pdf）"
+            detail=f"不支持的附件类别：{category}"
         )
     
     # 检查文件大小（需要在读取后检查，这里先检查Content-Length）
@@ -69,7 +79,7 @@ def validate_file(file: UploadFile) -> None:
         )
 
 
-def save_uploaded_file(file: UploadFile, project_id: int) -> Dict[str, Any]:
+def save_uploaded_file(file: UploadFile, project_id: int, category: str = "pdf") -> Dict[str, Any]:
     """
     保存上传的文件
     
@@ -89,7 +99,7 @@ def save_uploaded_file(file: UploadFile, project_id: int) -> Dict[str, Any]:
         HTTPException: 文件保存失败
     """
     # 验证文件
-    validate_file(file)
+    validate_file(file, category=category)
     
     # 确保上传目录存在
     upload_dir = ensure_upload_dir(project_id)
@@ -125,7 +135,9 @@ def save_uploaded_file(file: UploadFile, project_id: int) -> Dict[str, Any]:
             "stored_filename": stored_filename,
             "file_path": f"{PROJECT_UPLOAD_DIR}/{project_id}/{stored_filename}",
             "file_size": file_size,
-            "upload_time": datetime.now().isoformat()
+            "upload_time": datetime.now().isoformat(),
+            "category": category,
+            "can_preview": category == "pdf"
         }
         
         return file_info

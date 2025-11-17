@@ -37,11 +37,11 @@ export const projectApi = {
   },
 
   // 上传项目附件
-  uploadAttachment(projectId, file) {
+  uploadAttachment(projectId, file, category = 'pdf') {
     const formData = new FormData()
     formData.append('file', file)
     // FormData 的 Content-Type 会在请求拦截器中自动处理
-    return api.post(`/projects/${projectId}/attachments`, formData)
+    return api.post(`/projects/${projectId}/attachments`, formData, { params: { category } })
   },
 
   // 删除项目附件

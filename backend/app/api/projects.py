@@ -16,7 +16,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from backend.database import get_db
 from backend.app import crud
 from backend.app.schemas import (
@@ -41,6 +41,41 @@ def _ensure_list(value):
         except Exception:
             return []
     return []
+
+
+def _normalize_attachments(raw_attachments) -> List[Dict[str, Any]]:
+    """
+    规范化附件列表
+    - 确保 file_url 为相对路径
+    - 补充 category/can_preview 字段，兼容旧数据
+    """
+    normalized = []
+    for att in _ensure_list(raw_attachments):
+        if not isinstance(att, dict):
+            continue
+
+        att_copy = att.copy()
+        file_path = att_copy.get("file_path", "")
+        stored_file_url = att_copy.get("file_url", "")
+
+        if file_path:
+            if stored_file_url and (stored_file_url.startswith("http://") or stored_file_url.startswith("https://")):
+                from urllib.parse import urlparse
+                parsed = urlparse(stored_file_url)
+                att_copy["file_url"] = parsed.path or get_file_url(file_path, base_url=None)
+            elif not stored_file_url or not stored_file_url.startswith("/"):
+                att_copy["file_url"] = get_file_url(file_path, base_url=None)
+            # 如果需要绝对路径，可根据base_url构建，但默认返回相对路径
+        else:
+            att_copy["file_url"] = stored_file_url
+
+        category = att_copy.get("category") or "pdf"
+        att_copy["category"] = category
+        if "can_preview" not in att_copy:
+            att_copy["can_preview"] = category == "pdf"
+
+        normalized.append(att_copy)
+    return normalized
 
 @router.post("", response_model=Project, status_code=201)
 def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
@@ -100,20 +135,7 @@ def get_projects(
     for p in db_projects:
         # 处理附件，返回时保持相对路径（前端会基于当前域名构建完整URL）
         # 数据库中存储的是相对路径，返回时也保持相对路径，让前端处理
-        attachments = _ensure_list(p.attachments)
-        for att in attachments:
-            if "file_path" in att:
-                # 如果存储的是绝对路径（旧数据），提取相对路径部分
-                stored_file_url = att.get("file_url", "")
-                if stored_file_url and (stored_file_url.startswith("http://") or stored_file_url.startswith("https://")):
-                    # 提取相对路径部分
-                    from urllib.parse import urlparse
-                    parsed = urlparse(stored_file_url)
-                    att["file_url"] = parsed.path
-                elif not stored_file_url or not stored_file_url.startswith("/"):
-                    # 如果没有file_url或不是相对路径，从file_path生成
-                    att["file_url"] = get_file_url(att["file_path"], base_url=None)
-                # 如果已经是相对路径，保持不变
+        attachments = _normalize_attachments(p.attachments)
         
         projects.append(Project(
             id=p.id,
@@ -166,20 +188,7 @@ def get_project(project_id: int, request: Request = None, db: Session = Depends(
     
     # 处理附件，返回时保持相对路径（前端会基于当前域名构建完整URL）
     # 数据库中存储的是相对路径，返回时也保持相对路径，让前端处理
-    attachments = _ensure_list(db_project.attachments)
-    for att in attachments:
-        if "file_path" in att:
-            # 如果存储的是绝对路径（旧数据），提取相对路径部分
-            stored_file_url = att.get("file_url", "")
-            if stored_file_url and (stored_file_url.startswith("http://") or stored_file_url.startswith("https://")):
-                # 提取相对路径部分
-                from urllib.parse import urlparse
-                parsed = urlparse(stored_file_url)
-                att["file_url"] = parsed.path
-            elif not stored_file_url or not stored_file_url.startswith("/"):
-                # 如果没有file_url或不是相对路径，从file_path生成
-                att["file_url"] = get_file_url(att["file_path"], base_url=None)
-            # 如果已经是相对路径，保持不变
+    attachments = _normalize_attachments(db_project.attachments)
     
     # 构建响应对象（避免循环引用，不包含interfaces和dictionaries的详细信息）
     from backend.app.schemas import ProjectDetail
@@ -331,22 +340,28 @@ def get_project_dictionaries(
 def upload_project_attachment(
     project_id: int,
     file: UploadFile = File(...),
+    category: str = Query("pdf", description="附件类别：pdf（可预览）或 other（仅下载）"),
     request: Request = None,
     db: Session = Depends(get_db)
 ):
     """
     上传项目附件
     
-    仅支持PDF格式文件，最大50MB。
-    上传成功后，文件信息会保存到项目的 attachments 字段中。
+    - pdf: 仅支持PDF，上传后可在线预览
+    - other: 允许任意常见格式，仅支持下载查看
+    
+    单个文件最大50MB，上传成功后文件信息会保存到项目的 attachments 字段中。
     """
     # 验证项目是否存在
     db_project = crud.get_project(db, project_id, load_relations=False)
     if not db_project:
         raise HTTPException(status_code=404, detail="项目不存在")
     
+    if category not in {"pdf", "other"}:
+        raise HTTPException(status_code=400, detail="附件类别必须是 pdf 或 other")
+    
     # 保存文件
-    file_info = save_uploaded_file(file, project_id)
+    file_info = save_uploaded_file(file, project_id, category=category)
     
     # 保存相对路径到数据库，前端访问时会自动使用当前域名和端口
     # 不保存绝对路径，避免端口号错误或域名变更问题
@@ -376,7 +391,9 @@ def upload_project_attachment(
         "file_path": file_info["file_path"],
         "file_size": file_info["file_size"],
         "upload_time": file_info["upload_time"],
-        "file_url": relative_url  # 强制使用相对路径
+        "file_url": relative_url,  # 强制使用相对路径
+        "category": file_info.get("category", category),
+        "can_preview": file_info.get("can_preview", category == "pdf")
     }
     attachments.append(file_info_for_db)
     
