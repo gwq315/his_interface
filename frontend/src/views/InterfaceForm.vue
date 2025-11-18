@@ -432,6 +432,9 @@ const handleSubmit = async () => {
 const projectOptions = ref([])
 
 onMounted(async () => {
+  // 延迟加载，确保Token已准备好
+  await new Promise(resolve => setTimeout(resolve, 100))
+  
   // 加载项目选项
   try {
     projectOptions.value = await projectApi.getList({ limit: 1000 })

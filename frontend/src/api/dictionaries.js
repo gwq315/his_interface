@@ -29,6 +29,11 @@ export const dictionaryApi = {
   // 删除字典
   delete(id) {
     return api.delete(`/dictionaries/${id}`)
+  },
+
+  // 批量更新字典值
+  batchUpdateValues(dictionaryId, values) {
+    return api.put(`/dictionaries/${dictionaryId}/values`, values)
   }
 }
 

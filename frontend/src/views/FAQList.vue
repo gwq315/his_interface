@@ -17,15 +17,28 @@
         <el-option label="PDF" value="pdf" />
         <el-option label="图片" value="image" />
       </el-select>
+      <el-select 
+        v-model="searchForm.module" 
+        placeholder="模块" 
+        clearable 
+        style="width: 150px"
+      >
+        <el-option 
+          v-for="module in moduleOptions" 
+          :key="module.value" 
+          :label="module.label" 
+          :value="module.value" 
+        />
+      </el-select>
       <el-button type="primary" @click="loadData" :loading="loading">查询</el-button>
-      <el-button type="success" @click="openCreate">新建文档</el-button>
+      <el-button type="success" @click="openCreate">新建常见问题</el-button>
     </div>
 
     <div class="content-layout">
-      <!-- 左侧文档列表 -->
+      <!-- 左侧常见问题列表 -->
       <div class="left-panel">
         <div class="list-header">
-          <span>文档列表</span>
+          <span>常见问题列表</span>
           <span class="total-count">共 {{ total }} 条</span>
         </div>
         <div class="list-content" v-loading="loading">
@@ -33,8 +46,8 @@
             v-for="item in items" 
             :key="item.id"
             class="list-item"
-            :class="{ active: selectedDocument?.id === item.id }"
-            @click="selectDocument(item)"
+            :class="{ active: selectedFAQ?.id === item.id }"
+            @click="selectFAQ(item)"
             @contextmenu.prevent="handleContextMenu($event, item)"
           >
             <div class="item-header">
@@ -64,7 +77,7 @@
               </el-dropdown>
             </div>
           </div>
-          <el-empty v-if="!loading && items.length === 0" description="暂无文档" :image-size="100" />
+          <el-empty v-if="!loading && items.length === 0" description="暂无常见问题" :image-size="100" />
         </div>
         <div class="list-footer">
           <el-pagination
@@ -81,30 +94,30 @@
 
       <!-- 右侧预览区域 -->
       <div class="right-panel">
-        <div v-if="selectedDocument" class="preview-content">
+        <div v-if="selectedFAQ" class="preview-content">
           <div class="preview-header">
             <div class="preview-title">
-              <h3>{{ selectedDocument.title }}</h3>
+              <h3>{{ selectedFAQ.title }}</h3>
               <div class="preview-meta">
-                <el-tag :type="selectedDocument.document_type === 'pdf' ? 'primary' : 'success'" size="small">
-                  {{ selectedDocument.document_type === 'pdf' ? 'PDF' : '图片' }}
+                <el-tag :type="selectedFAQ.document_type === 'pdf' ? 'primary' : 'success'" size="small">
+                  {{ selectedFAQ.document_type === 'pdf' ? 'PDF' : '图片' }}
                 </el-tag>
-                <span class="meta-item" v-if="selectedDocument.region">地区：{{ selectedDocument.region }}</span>
-                <span class="meta-item" v-if="selectedDocument.person">人员：{{ selectedDocument.person }}</span>
-                <span class="meta-item">创建时间：{{ formatDate(selectedDocument.created_at) }}</span>
+                <span class="meta-item" v-if="selectedFAQ.module">模块：{{ selectedFAQ.module }}</span>
+                <span class="meta-item" v-if="selectedFAQ.person">人员：{{ selectedFAQ.person }}</span>
+                <span class="meta-item">创建时间：{{ formatDate(selectedFAQ.created_at) }}</span>
               </div>
             </div>
           </div>
           <div class="preview-body">
-            <div v-if="selectedDocument.document_type === 'pdf'" class="pdf-preview">
+            <div v-if="selectedFAQ.document_type === 'pdf'" class="pdf-preview">
               <iframe 
-                :src="getPreviewUrl(selectedDocument.file_path)" 
+                :src="getPreviewUrl(selectedFAQ.file_path)" 
                 class="preview-iframe"
               />
             </div>
             <div v-else class="image-preview">
               <img 
-                :src="getPreviewUrl(selectedDocument.file_path)" 
+                :src="getPreviewUrl(selectedFAQ.file_path)" 
                 class="preview-image"
                 alt="预览图片"
                 @error="handleImageError"
@@ -115,14 +128,14 @@
                 <p>图片加载失败，请检查文件是否存在或网络连接</p>
               </div>
             </div>
-            <div v-if="selectedDocument.description" class="preview-description">
+            <div v-if="selectedFAQ.description" class="preview-description">
               <h4>简要描述</h4>
-              <p>{{ selectedDocument.description }}</p>
+              <p>{{ selectedFAQ.description }}</p>
             </div>
           </div>
         </div>
         <div v-else class="preview-placeholder">
-          <el-empty description="请从左侧选择文档进行预览" :image-size="150" />
+          <el-empty description="请从左侧选择常见问题进行预览" :image-size="150" />
         </div>
       </div>
     </div>
@@ -130,7 +143,7 @@
     <!-- 新增/编辑对话框 -->
     <el-dialog 
       v-model="dialog.visible" 
-      :title="dialog.isEdit ? '编辑文档' : '新建文档'" 
+      :title="dialog.isEdit ? '编辑常见问题' : '新建常见问题'" 
       width="700px" 
       :close-on-press-escape="false"
     >
@@ -147,8 +160,15 @@
         <el-form-item label="简要描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item label="地区">
-          <el-input v-model="form.region" maxlength="50" show-word-limit />
+        <el-form-item label="模块">
+          <el-select v-model="form.module" placeholder="请选择模块" clearable style="width: 100%">
+            <el-option 
+              v-for="module in moduleOptions" 
+              :key="module.value" 
+              :label="module.label" 
+              :value="module.value" 
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="人员">
           <el-input v-model="form.person" maxlength="50" show-word-limit />
@@ -204,7 +224,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Document, Picture, MoreFilled, PictureFilled } from '@element-plus/icons-vue'
-import { getDocuments, createDocument, updateDocument, deleteDocument, getDocumentPreviewUrl } from '../api/documents'
+import { getFAQs, createFAQ, updateFAQ, deleteFAQ, getFAQPreviewUrl } from '../api/faqs'
+import { dictionaryApi } from '../api/dictionaries'
 
 const loading = ref(false)
 const items = ref([])
@@ -212,17 +233,19 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const imageLoadError = ref(false)
+const moduleOptions = ref([])
 
 const searchForm = reactive({
   keyword: '',
-  document_type: null
+  document_type: null,
+  module: null
 })
 
 const form = reactive({
   id: null,
   title: '',
   description: '',
-  region: '',
+  module: '',
   person: '',
   document_type: 'pdf',
   file: null
@@ -234,8 +257,29 @@ const dialog = reactive({
   saving: false
 })
 
-const selectedDocument = ref(null)
+const selectedFAQ = ref(null)
 const uploadRef = ref(null)
+
+// 加载模块字典
+async function loadModuleOptions() {
+  try {
+    // 尝试获取编码为 FAQ_MODULE 的字典
+    const dict = await dictionaryApi.getByCode('FAQ_MODULE')
+    if (dict && dict.values && dict.values.length > 0) {
+      moduleOptions.value = dict.values.map(v => ({
+        label: v.value,
+        value: v.value
+      }))
+    } else {
+      // 如果字典不存在或为空，使用空数组
+      moduleOptions.value = []
+    }
+  } catch (error) {
+    // 如果字典不存在，忽略错误，使用空数组
+    console.warn('模块字典不存在或加载失败:', error)
+    moduleOptions.value = []
+  }
+}
 
 // 加载数据
 async function loadData() {
@@ -245,9 +289,10 @@ async function loadData() {
       page: page.value,
       page_size: pageSize.value,
       keyword: searchForm.keyword || undefined,
-      document_type: searchForm.document_type || undefined
+      document_type: searchForm.document_type || undefined,
+      module: searchForm.module || undefined
     }
-    const res = await getDocuments(params)
+    const res = await getFAQs(params)
     items.value = res.items
     total.value = res.total
   } catch (error) {
@@ -265,7 +310,7 @@ function openCreate() {
     id: null,
     title: '',
     description: '',
-    region: '',
+    module: '',
     person: '',
     document_type: 'pdf',
     file: null
@@ -280,7 +325,7 @@ function openEdit(row) {
     id: row.id,
     title: row.title,
     description: row.description || '',
-    region: row.region || '',
+    module: row.module || '',
     person: row.person || '',
     document_type: row.document_type,
     file: null
@@ -312,19 +357,19 @@ async function submit() {
     let res
     if (dialog.isEdit) {
       // 更新
-      res = await updateDocument(form.id, {
+      res = await updateFAQ(form.id, {
         title: form.title,
         description: form.description,
-        region: form.region,
+        module: form.module,
         person: form.person
       })
       ElMessage.success('更新成功')
-      // 更新选中的文档信息
-      if (selectedDocument.value && selectedDocument.value.id === form.id) {
-        Object.assign(selectedDocument.value, {
+      // 更新选中的常见问题信息
+      if (selectedFAQ.value && selectedFAQ.value.id === form.id) {
+        Object.assign(selectedFAQ.value, {
           title: form.title,
           description: form.description,
-          region: form.region,
+          module: form.module,
           person: form.person
         })
       }
@@ -333,7 +378,7 @@ async function submit() {
       const formData = new FormData()
       formData.append('title', form.title)
       formData.append('description', form.description || '')
-      formData.append('region', form.region || '')
+      formData.append('module', form.module || '')
       formData.append('person', form.person || '')
       formData.append('document_type', form.document_type)
       
@@ -341,18 +386,18 @@ async function submit() {
         formData.append('file', form.file)
       }
       
-      res = await createDocument(formData)
+      res = await createFAQ(formData)
       ElMessage.success('创建成功')
     }
     
     dialog.visible = false
     await loadData()
     
-    // 如果是新建，选中新创建的文档
+    // 如果是新建，选中新创建的常见问题
     if (!dialog.isEdit && res) {
       const newItem = items.value.find(item => item.id === res.id)
       if (newItem) {
-        selectDocument(newItem)
+        selectFAQ(newItem)
       }
     }
   } catch (error) {
@@ -362,9 +407,9 @@ async function submit() {
   }
 }
 
-// 选择文档
-function selectDocument(item) {
-  selectedDocument.value = item
+// 选择常见问题
+function selectFAQ(item) {
+  selectedFAQ.value = item
   // 重置图片加载错误状态
   imageLoadError.value = false
 }
@@ -403,23 +448,23 @@ function handleImageLoad() {
 
 // 获取预览URL
 function getPreviewUrl(filePath) {
-  return getDocumentPreviewUrl(filePath)
+  return getFAQPreviewUrl(filePath)
 }
 
-// 删除文档
+// 删除常见问题
 async function handleDelete(row) {
   try {
-    await ElMessageBox.confirm('确定要删除这个文档吗？', '提示', {
+    await ElMessageBox.confirm('确定要删除这个常见问题吗？', '提示', {
       type: 'warning'
     })
     
     row._deleting = true
-    await deleteDocument(row.id)
+    await deleteFAQ(row.id)
     ElMessage.success('删除成功')
     
-    // 如果删除的是当前选中的文档，清空选中
-    if (selectedDocument.value && selectedDocument.value.id === row.id) {
-      selectedDocument.value = null
+    // 如果删除的是当前选中的常见问题，清空选中
+    if (selectedFAQ.value && selectedFAQ.value.id === row.id) {
+      selectedFAQ.value = null
     }
     
     await loadData()
@@ -432,8 +477,9 @@ async function handleDelete(row) {
   }
 }
 
-onMounted(() => {
-  loadData()
+onMounted(async () => {
+  await loadModuleOptions()
+  await loadData()
 })
 </script>
 
@@ -461,7 +507,7 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* 左侧文档列表 */
+/* 左侧常见问题列表 */
 .left-panel {
   width: 350px;
   flex-shrink: 0;

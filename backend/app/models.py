@@ -27,6 +27,18 @@ import enum
 
 # ========== 枚举类型定义 ==========
 
+class UserRole(str, enum.Enum):
+    """
+    用户角色枚举
+    
+    用于区分不同类型的用户：
+    - ADMIN: 管理员（可以增删改所有数据）
+    - USER: 普通人员（只能查看管理员增加的项目，可以增删改自己增加的项目）
+    """
+    ADMIN = "admin"  # 管理员
+    USER = "user"    # 普通人员
+
+
 class Project(Base):
     """
     项目表模型
@@ -72,10 +84,13 @@ class Project(Base):
     # 描述字段（使用 UnicodeText 支持中文）
     description = Column(UnicodeText, comment="项目功能描述，详细说明项目的用途和功能")
     
+    # 创建人字段（用于权限控制）
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True, comment="创建人ID，外键关联users表，用于权限控制")
+    
     # 时间戳字段
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间，自动记录")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间，每次修改时自动更新")
-    
+
     # ========== 关联关系定义 ==========
     
     # 接口关联：一个项目可以有多个接口
@@ -83,6 +98,9 @@ class Project(Base):
     
     # 字典关联：一个项目可以有多个字典
     dictionaries = relationship("Dictionary", back_populates="project", cascade="all, delete-orphan")
+    
+    # 创建人关联：多个项目可以由一个用户创建
+    creator = relationship("User", back_populates="created_projects", foreign_keys=[creator_id])
 
 
 class InterfaceType(str, enum.Enum):
@@ -107,6 +125,18 @@ class ParameterType(str, enum.Enum):
     """
     INPUT = "input"   # 入参：接口的输入参数
     OUTPUT = "output" # 出参：接口的返回参数
+
+
+class DocumentType(str, enum.Enum):
+    """
+    文档类型枚举
+    
+    用于区分不同类型的文档：
+    - PDF: PDF文档
+    - IMAGE: 图片（截图）
+    """
+    PDF = "pdf"      # PDF文档
+    IMAGE = "image"  # 图片（截图）
 
 
 class Interface(Base):
@@ -171,6 +201,9 @@ class Interface(Base):
     view_definition = Column(UnicodeText, nullable=True, comment="视图定义，存储数据库视图的SQL定义，纯文本格式")
     notes = Column(UnicodeText, nullable=True, comment="备注说明，支持HTML格式，用于存储常见操作说明、错误提示等图文内容")
     
+    # 创建人字段（用于权限控制）
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True, comment="创建人ID，外键关联users表，用于权限控制")
+    
     # 时间戳字段
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间，自动记录")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间，每次修改时自动更新")
@@ -186,6 +219,9 @@ class Interface(Base):
     
     # 字典关联：一个接口可以关联多个字典（可选，保留向后兼容）
     dictionaries = relationship("Dictionary", back_populates="interface")
+    
+    # 创建人关联：多个接口可以由一个用户创建
+    creator = relationship("User", foreign_keys=[creator_id])
 
 
 class Parameter(Base):
@@ -296,6 +332,9 @@ class Dictionary(Base):
     # 接口关联字段（可选，保留向后兼容）
     interface_id = Column(Integer, ForeignKey("interfaces.id"), nullable=True, comment="关联接口ID，外键关联interfaces表，可选，表示该字典专用于某个接口")
     
+    # 创建人字段（用于权限控制）
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True, comment="创建人ID，外键关联users表，用于权限控制")
+    
     # 时间戳字段
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间，自动记录")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间，每次修改时自动更新")
@@ -314,6 +353,65 @@ class Dictionary(Base):
     
     # 参数关联：多个参数可以关联到同一个字典
     parameters = relationship("Parameter", back_populates="dictionary")
+    
+    # 创建人关联：多个字典可以由一个用户创建
+    creator = relationship("User", foreign_keys=[creator_id])
+
+
+class FAQ(Base):
+    """
+    常见问题表模型
+    
+    存储常见问题信息，用于集中保存和管理。
+    每个常见问题包含标题、简要描述、模块、人员等信息。
+    
+    表名: faqs
+    
+    字段说明:
+    - id: 主键，自增
+    - title: 标题（必填，最大200字符）
+    - description: 简要描述（可选，文本类型）
+    - module: 模块（可选，最大50字符，关联字典）
+    - person: 人员（可选，最大50字符）
+    - document_type: 文档类型（必填，枚举：pdf/image）
+    - file_path: 文件路径（必填，最大500字符）
+    - file_name: 原始文件名（必填，最大200字符）
+    - file_size: 文件大小（字节）
+    - mime_type: MIME类型（可选，最大100字符，如application/pdf、image/png）
+    - created_at: 创建时间（自动生成）
+    - updated_at: 更新时间（自动更新）
+    """
+    __tablename__ = "faqs"
+    
+    # 主键字段
+    id = Column(Integer, primary_key=True, index=True, comment="主键ID，自增")
+    
+    # 基本信息字段（使用 Unicode 支持中文）
+    title = Column(Unicode(200), nullable=False, index=True, comment="标题，用于搜索和显示")
+    description = Column(UnicodeText, comment="简要描述，用于搜索和显示")
+    
+    # 来源信息字段（使用 Unicode 支持中文）
+    module = Column(Unicode(50), comment="模块，常见问题所属模块，关联字典")
+    person = Column(Unicode(50), comment="人员，常见问题来源人员")
+    
+    # 文档类型字段
+    document_type = Column(Enum(DocumentType), nullable=False, comment="文档类型：pdf（PDF文档）或image（图片/截图）")
+    
+    # 文件信息字段（使用 Unicode 支持中文路径和文件名）
+    file_path = Column(Unicode(500), nullable=False, comment="文件相对路径，可能包含中文，如：uploads/faqs/1/1704067200_文档.pdf")
+    file_name = Column(Unicode(200), nullable=False, comment="原始文件名，可能包含中文")
+    file_size = Column(Integer, nullable=False, comment="文件大小（字节）")
+    mime_type = Column(String(100), comment="MIME类型，如application/pdf、image/png、image/jpeg")
+    
+    # 创建人字段（用于权限控制）
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True, comment="创建人ID，外键关联users表，用于权限控制")
+    
+    # 时间戳字段
+    created_at = Column(DateTime, server_default=func.now(), comment="创建时间，自动记录")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间，每次修改时自动更新")
+    
+    # 创建人关联：多个常见问题可以由一个用户创建
+    creator = relationship("User", foreign_keys=[creator_id])
 
 
 class DictionaryValue(Base):
@@ -362,18 +460,6 @@ class DictionaryValue(Base):
     dictionary = relationship("Dictionary", back_populates="values")
 
 
-class DocumentType(str, enum.Enum):
-    """
-    文档类型枚举
-    
-    用于区分不同类型的文档：
-    - PDF: PDF文档
-    - IMAGE: 图片（截图）
-    """
-    PDF = "pdf"      # PDF文档
-    IMAGE = "image"  # 图片（截图）
-
-
 class Document(Base):
     """
     文档/截图表模型
@@ -419,6 +505,55 @@ class Document(Base):
     file_size = Column(Integer, nullable=False, comment="文件大小（字节）")
     mime_type = Column(String(100), comment="MIME类型，如application/pdf、image/png、image/jpeg")
     
+    # 创建人字段（用于权限控制）
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True, comment="创建人ID，外键关联users表，用于权限控制")
+    
     # 时间戳字段
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间，自动记录")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间，每次修改时自动更新")
+    
+    # 创建人关联：多个文档可以由一个用户创建
+    creator = relationship("User", foreign_keys=[creator_id])
+
+
+class User(Base):
+    """
+    用户表模型
+    
+    存储系统用户信息，用于登录和权限控制。
+    
+    表名: users
+    
+    字段说明:
+    - id: 主键，自增
+    - username: 用户名（必填，唯一，最大50字符）
+    - password_hash: 密码哈希（必填，最大255字符）
+    - name: 姓名（必填，最大100字符）
+    - role: 角色（必填，枚举：admin/user）
+    - is_active: 是否启用（默认True）
+    - created_at: 创建时间（自动生成）
+    - updated_at: 更新时间（自动更新）
+    
+    关联关系:
+    - created_projects: 一对多关系，一个用户可以创建多个项目
+    """
+    __tablename__ = "users"
+    
+    # 主键字段
+    id = Column(Integer, primary_key=True, index=True, comment="主键ID，自增")
+    
+    # 基本信息字段（使用 Unicode 支持中文）
+    username = Column(Unicode(50), unique=True, nullable=False, index=True, comment="用户名，唯一标识，用于登录")
+    password_hash = Column(UnicodeText, nullable=True, comment="密码（明文存储，可选）")
+    name = Column(Unicode(100), nullable=False, comment="用户姓名")
+    role = Column(Enum(UserRole, values_callable=lambda obj: [e.value for e in obj], native_enum=False, length=20), nullable=False, default=UserRole.USER, comment="用户角色：admin（管理员）或user（普通人员）")
+    is_active = Column(Boolean, default=True, nullable=False, comment="是否启用，False表示禁用")
+    
+    # 时间戳字段
+    created_at = Column(DateTime, server_default=func.now(), comment="创建时间，自动记录")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间，每次修改时自动更新")
+    
+    # ========== 关联关系定义 ==========
+    
+    # 项目关联：一个用户可以创建多个项目
+    created_projects = relationship("Project", back_populates="creator", foreign_keys="Project.creator_id")

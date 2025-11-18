@@ -19,7 +19,7 @@ Pydantic的优势：
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from datetime import datetime, date
-from backend.app.models import InterfaceType, ParameterType, DocumentType
+from backend.app.models import InterfaceType, ParameterType, DocumentType, UserRole
 
 # 避免循环引用，使用字符串类型注解
 
@@ -81,6 +81,7 @@ class ProjectUpdate(BaseModel):
 class Project(ProjectBase):
     """项目响应模型"""
     id: int
+    creator_id: Optional[int] = Field(None, description="创建人ID")
     created_at: datetime
     updated_at: datetime
     
@@ -148,6 +149,7 @@ class Dictionary(DictionaryBase):
     id: int
     project: Optional[Project] = None
     values: List[DictionaryValue] = []
+    creator_id: Optional[int] = Field(None, description="创建人ID")
     created_at: datetime
     updated_at: datetime
 
@@ -251,6 +253,7 @@ class Interface(InterfaceBase):
     project: Optional[Project] = None
     parameters: List[Parameter] = []
     dictionaries: List[Dictionary] = []
+    creator_id: Optional[int] = Field(None, description="创建人ID")
     created_at: datetime
     updated_at: datetime
 
@@ -310,6 +313,7 @@ class Document(DocumentBase):
     file_name: str
     file_size: int
     mime_type: Optional[str] = None
+    creator_id: Optional[int] = Field(None, description="创建人ID")
     created_at: datetime
     updated_at: datetime
     
@@ -333,4 +337,107 @@ class DocumentListResponse(BaseModel):
     page: int
     page_size: int
     items: List[Document]
+
+
+# ========== 常见问题相关 Schema ==========
+
+class FAQBase(BaseModel):
+    """常见问题基础模型"""
+    title: str = Field(..., description="标题")
+    description: Optional[str] = Field(None, description="简要描述")
+    module: Optional[str] = Field(None, max_length=50, description="模块")
+    person: Optional[str] = Field(None, max_length=50, description="人员")
+    document_type: DocumentType = Field(..., description="文档类型")
+
+
+class FAQCreate(FAQBase):
+    """创建常见问题"""
+    pass
+
+
+class FAQUpdate(BaseModel):
+    """更新常见问题"""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    module: Optional[str] = Field(None, max_length=50)
+    person: Optional[str] = Field(None, max_length=50)
+
+
+class FAQ(FAQBase):
+    """常见问题响应模型"""
+    id: int
+    file_path: str
+    file_name: str
+    file_size: int
+    mime_type: Optional[str] = None
+    creator_id: Optional[int] = Field(None, description="创建人ID")
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class FAQSearch(BaseModel):
+    """常见问题搜索模型"""
+    keyword: Optional[str] = Field(None, description="关键词（搜索标题、简要描述）")
+    document_type: Optional[DocumentType] = Field(None, description="文档类型")
+    module: Optional[str] = Field(None, description="模块")
+    person: Optional[str] = Field(None, description="人员")
+    page: int = Field(1, ge=1, description="页码")
+    page_size: int = Field(20, ge=1, le=100, description="每页数量")
+
+
+class FAQListResponse(BaseModel):
+    """常见问题列表响应"""
+    total: int
+    page: int
+    page_size: int
+    items: List[FAQ]
+
+
+# ========== 用户相关 Schema ==========
+
+class UserBase(BaseModel):
+    """用户基础模型"""
+    username: str = Field(..., description="用户名", max_length=50)
+    name: str = Field(..., description="姓名", max_length=100)
+    role: UserRole = Field(UserRole.USER, description="用户角色")
+
+
+class UserCreate(UserBase):
+    """创建用户"""
+    password: Optional[str] = Field(None, description="密码（可选，不限制长度）")
+
+
+class UserUpdate(BaseModel):
+    """更新用户"""
+    name: Optional[str] = Field(None, description="姓名", max_length=100)
+    password: Optional[str] = Field(None, description="密码（可选，不限制长度）")
+    role: Optional[UserRole] = Field(None, description="用户角色")
+    is_active: Optional[bool] = Field(None, description="是否启用")
+
+
+class User(UserBase):
+    """用户响应模型"""
+    id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UserLogin(BaseModel):
+    """用户登录模型"""
+    username: str = Field(..., description="用户名")
+    password: Optional[str] = Field(None, description="密码（可选）")
+
+
+class Token(BaseModel):
+    """Token响应模型"""
+    access_token: str = Field(..., description="访问令牌")
+    token_type: str = Field(default="bearer", description="令牌类型")
+    user: User = Field(..., description="用户信息")
 

@@ -7,6 +7,7 @@ python-multipart
 openpyxl
 python-jose[cryptography]
 passlib[bcrypt]
+bcrypt<4.0.0
 
 # SQL Server数据库驱动（二选一）
 # 方式1：使用pyodbc（推荐，需要安装ODBC驱动）

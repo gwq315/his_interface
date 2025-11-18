@@ -44,8 +44,8 @@
       </el-table>
     </el-dialog>
 
-    <!-- 新增字典对话框 -->
-    <el-dialog v-model="dialogVisible" title="新增字典" width="720px" :close-on-press-escape="false">
+    <!-- 新增/编辑字典对话框 -->
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑字典' : '新增字典'" width="720px" :close-on-press-escape="false">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="项目" prop="project_id">
           <el-select v-model="form.project_id" placeholder="请选择项目" filterable clearable style="width: 320px;">
@@ -55,7 +55,7 @@
         <el-row :gutter="10">
           <el-col :span="10">
         <el-form-item label="字典编码" prop="code">
-          <el-input v-model="form.code" placeholder="请输入字典编码" />
+          <el-input v-model="form.code" placeholder="请输入字典编码" :disabled="isEdit" />
         </el-form-item>
         </el-col>
         <el-col :span="14">
@@ -122,6 +122,8 @@ const currentDictValues = ref([])
 // 新增/编辑对话框数据
 const dialogVisible = ref(false)
 const dialogSaving = ref(false)
+const isEdit = ref(false)
+const editingDictionaryId = ref(null)
 const formRef = ref()
 const form = ref({
   project_id: undefined,
@@ -155,6 +157,8 @@ const loadDictionaries = async () => {
 
 // 新增
 const handleAdd = () => {
+  isEdit.value = false
+  editingDictionaryId.value = null
   form.value = { project_id: undefined, name: '', code: '', description: '', interface_id: undefined, values: [] }
   dialogVisible.value = true
 }
@@ -176,20 +180,48 @@ const submitDictionary = async () => {
   dialogSaving.value = true
   try {
     // 仅提交有内容的字典值
-    const values = (form.value.values || []).filter(v => v.key && v.value)
-    await dictionaryApi.create({
-      project_id: form.value.project_id,
-      name: form.value.name,
-      code: form.value.code,
-      description: form.value.description || '',
-      interface_id: form.value.interface_id || undefined,
-      values
-    })
-    ElMessage.success('创建成功')
+    const values = (form.value.values || []).filter(v => v.key && v.value).map((v, idx) => ({
+      key: v.key,
+      value: v.value,
+      description: v.description || '',
+      order_index: v.order_index || idx + 1
+    }))
+    
+    if (isEdit.value) {
+      // 编辑模式：更新字典基本信息和字典值
+      await dictionaryApi.update(editingDictionaryId.value, {
+        project_id: form.value.project_id,
+        name: form.value.name,
+        description: form.value.description || '',
+        interface_id: form.value.interface_id || undefined
+      })
+      
+      // 批量更新字典值
+      if (values.length > 0) {
+        await dictionaryApi.batchUpdateValues(editingDictionaryId.value, values)
+      } else {
+        // 如果没有字典值，清空所有字典值
+        await dictionaryApi.batchUpdateValues(editingDictionaryId.value, [])
+      }
+      
+      ElMessage.success('更新成功')
+    } else {
+      // 新增模式
+      await dictionaryApi.create({
+        project_id: form.value.project_id,
+        name: form.value.name,
+        code: form.value.code,
+        description: form.value.description || '',
+        interface_id: form.value.interface_id || undefined,
+        values
+      })
+      ElMessage.success('创建成功')
+    }
+    
     dialogVisible.value = false
     await loadDictionaries()
   } catch (e) {
-    ElMessage.error(e.message)
+    ElMessage.error(e.message || '操作失败')
   } finally {
     dialogSaving.value = false
   }
@@ -202,8 +234,34 @@ const handleViewValues = (dictionary) => {
 }
 
 // 编辑
-const handleEdit = (row) => {
-  ElMessage.info('字典编辑功能待完善')
+const handleEdit = async (row) => {
+  isEdit.value = true
+  editingDictionaryId.value = row.id
+  
+  try {
+    // 加载字典详情（包含字典值）
+    const dictionary = await dictionaryApi.getById(row.id)
+    
+    // 填充表单数据
+    form.value = {
+      project_id: dictionary.project_id,
+      name: dictionary.name,
+      code: dictionary.code,
+      description: dictionary.description || '',
+      interface_id: dictionary.interface_id || undefined,
+      values: (dictionary.values || []).map(v => ({
+        id: v.id,
+        key: v.key,
+        value: v.value,
+        description: v.description || '',
+        order_index: v.order_index || 0
+      }))
+    }
+    
+    dialogVisible.value = true
+  } catch (error) {
+    ElMessage.error(error.message || '加载字典详情失败')
+  }
 }
 
 // 删除

@@ -1,12 +1,12 @@
 """
-文档/截图API路由模块
+常见问题API路由模块
 
-本模块提供文档和截图的RESTful API接口：
-1. 创建文档/截图（支持文件上传和剪贴板粘贴）
-2. 获取文档列表（支持关键词搜索和分页）
-3. 获取文档详情
-4. 更新文档信息
-5. 删除文档（同时删除文件）
+本模块提供常见问题的RESTful API接口：
+1. 创建常见问题（支持文件上传）
+2. 获取常见问题列表（支持关键词搜索和分页）
+3. 获取常见问题详情
+4. 更新常见问题信息
+5. 删除常见问题（同时删除文件）
 
 作者: Auto
 创建时间: 2024
@@ -18,24 +18,24 @@ from typing import Optional
 from backend.database import get_db
 from backend.app import crud
 from backend.app.schemas import (
-    DocumentCreate, DocumentUpdate, Document, DocumentSearch, DocumentListResponse
+    FAQCreate, FAQUpdate, FAQ, FAQSearch, FAQListResponse
 )
 from backend.app.utils.document_upload import (
-    save_uploaded_file, delete_uploaded_file, move_file_to_document_dir
+    save_uploaded_file, delete_uploaded_file, move_file_to_faq_dir
 )
 from backend.app.models import DocumentType
 from backend.app.api.auth import get_current_user
 from backend.app.models import User
 from backend.app.utils.permissions import check_resource_permission
 
-router = APIRouter(prefix="/api/documents", tags=["documents"])
+router = APIRouter(prefix="/api/faqs", tags=["常见问题"])
 
 
-@router.post("", response_model=Document, status_code=201)
-def create_document(
+@router.post("", response_model=FAQ, status_code=201)
+def create_faq(
     title: str = Form(..., description="标题"),
     description: Optional[str] = Form(None, description="简要描述"),
-    region: Optional[str] = Form(None, max_length=50, description="地区"),
+    module: Optional[str] = Form(None, max_length=50, description="模块"),
     person: Optional[str] = Form(None, max_length=50, description="人员"),
     document_type: str = Form(..., description="文档类型"),
     file: UploadFile = File(..., description="上传的文件"),
@@ -43,19 +43,19 @@ def create_document(
     current_user: User = Depends(get_current_user)
 ):
     """
-    创建新文档/截图
+    创建新常见问题
     
     支持上传PDF或图片文件（PNG、JPG、JPEG等）。
-    文件会先保存到临时目录，创建记录后再移动到文档目录。
+    文件会先保存到临时目录，创建记录后再移动到常见问题目录。
     
     权限说明：
-    - 所有登录用户都可以创建文档
-    - 创建的文档会自动设置创建人为当前登录用户
+    - 所有登录用户都可以创建常见问题
+    - 创建的常见问题会自动设置创建人为当前登录用户
     
     Args:
-        title: 文档标题（必填）
+        title: 常见问题标题（必填）
         description: 简要描述（可选）
-        region: 地区（可选，最大50字符）
+        module: 模块（可选，最大50字符）
         person: 人员（可选，最大50字符）
         document_type: 文档类型（必填，必须是'pdf'或'image'）
         file: 上传的文件对象（必填，支持PDF或图片格式）
@@ -63,7 +63,7 @@ def create_document(
         current_user: 当前登录用户（通过Token验证）
         
     Returns:
-        Document: 创建成功的文档对象，包含文件信息和元数据
+        FAQ: 创建成功的常见问题对象，包含文件信息和元数据
         
     Raises:
         HTTPException 400: 文档类型无效
@@ -80,18 +80,18 @@ def create_document(
     
     file_info = save_uploaded_file(file, doc_type.value)
     
-    # 创建文档记录（先保存到临时位置）
-    document_data = DocumentCreate(
+    # 创建常见问题记录（先保存到临时位置）
+    faq_data = FAQCreate(
         title=title,
         description=description,
-        region=region,
+        module=module,
         person=person,
         document_type=doc_type
     )
     
-    db_document = crud.create_document(
+    db_faq = crud.create_faq(
         db=db,
-        document=document_data,
+        faq=faq_data,
         file_path=file_info["file_path"],
         file_name=file_info["filename"],
         file_size=file_info["file_size"],
@@ -99,33 +99,33 @@ def create_document(
         creator_id=current_user.id
     )
     
-    # 将文件移动到文档目录
-    new_file_path = move_file_to_document_dir(file_info["file_path"], db_document.id)
-    db_document.file_path = new_file_path
+    # 将文件移动到常见问题目录
+    new_file_path = move_file_to_faq_dir(file_info["file_path"], db_faq.id)
+    db_faq.file_path = new_file_path
     db.commit()
-    db.refresh(db_document)
+    db.refresh(db_faq)
     
-    return Document(
-        id=db_document.id,
-        title=db_document.title,
-        description=db_document.description,
-        region=db_document.region,
-        person=db_document.person,
-        document_type=db_document.document_type,
-        file_path=db_document.file_path,
-        file_name=db_document.file_name,
-        file_size=db_document.file_size,
-        mime_type=db_document.mime_type,
-        created_at=db_document.created_at,
-        updated_at=db_document.updated_at
+    return FAQ(
+        id=db_faq.id,
+        title=db_faq.title,
+        description=db_faq.description,
+        module=db_faq.module,
+        person=db_faq.person,
+        document_type=db_faq.document_type,
+        file_path=db_faq.file_path,
+        file_name=db_faq.file_name,
+        file_size=db_faq.file_size,
+        mime_type=db_faq.mime_type,
+        created_at=db_faq.created_at,
+        updated_at=db_faq.updated_at
     )
 
 
-@router.get("", response_model=DocumentListResponse)
-def get_documents(
+@router.get("", response_model=FAQListResponse)
+def get_faqs(
     keyword: Optional[str] = Query(None, description="关键词（搜索标题、简要描述）"),
     document_type: Optional[DocumentType] = Query(None, description="文档类型"),
-    region: Optional[str] = Query(None, description="地区"),
+    module: Optional[str] = Query(None, description="模块"),
     person: Optional[str] = Query(None, description="人员"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
@@ -133,25 +133,25 @@ def get_documents(
     current_user: User = Depends(get_current_user)
 ):
     """
-    获取文档列表（支持多条件筛选、关键词搜索和分页）
+    获取常见问题列表（支持多条件筛选、关键词搜索和分页）
     
     支持以下筛选条件：
     - 关键词搜索：在标题、简要描述中模糊匹配
     - 文档类型筛选：pdf或image
-    - 地区筛选：按地区精确匹配
+    - 模块筛选：按模块精确匹配
     - 人员筛选：按人员精确匹配
     
     权限规则：
-    - 管理员可以看到所有文档
+    - 管理员可以看到所有常见问题
     - 普通用户只能看到：
-      * 管理员创建的文档
-      * 自己创建的文档
-      * 没有创建人的文档（兼容旧数据）
+      * 管理员创建的常见问题
+      * 自己创建的常见问题
+      * 没有创建人的常见问题（兼容旧数据）
     
     Args:
         keyword: 关键词（可选，用于在标题、简要描述中搜索）
         document_type: 文档类型（可选，pdf或image）
-        region: 地区（可选，精确匹配）
+        module: 模块（可选，精确匹配）
         person: 人员（可选，精确匹配）
         page: 页码（默认1，最小1）
         page_size: 每页数量（默认20，最小1，最大100）
@@ -159,18 +159,18 @@ def get_documents(
         current_user: 当前登录用户（通过Token验证）
         
     Returns:
-        DocumentListResponse: 包含总数、页码、每页数量和文档列表的响应对象
+        FAQListResponse: 包含总数、页码、每页数量和常见问题列表的响应对象
     """
-    search = DocumentSearch(
+    search = FAQSearch(
         keyword=keyword,
         document_type=document_type,
-        region=region,
+        module=module,
         person=person,
         page=page,
         page_size=page_size
     )
     
-    items, total = crud.search_documents(
+    items, total = crud.search_faqs(
         db, 
         search, 
         user_id=current_user.id, 
@@ -178,7 +178,7 @@ def get_documents(
     )
     
     # 转换为响应模型，确保file_path是相对路径
-    document_list = []
+    faq_list = []
     for item in items:
         # 清理file_path，确保是相对路径（不包含http://或https://）
         file_path = item.file_path
@@ -192,11 +192,11 @@ def get_documents(
             if file_path and not file_path.startswith("/"):
                 file_path = f"/{file_path}"
         
-        document_list.append(Document(
+        faq_list.append(FAQ(
             id=item.id,
             title=item.title,
             description=item.description,
-            region=item.region,
+            module=item.module,
             person=item.person,
             document_type=item.document_type,
             file_path=file_path,
@@ -208,40 +208,40 @@ def get_documents(
             updated_at=item.updated_at
         ))
     
-    return DocumentListResponse(
+    return FAQListResponse(
         total=total,
         page=page,
         page_size=page_size,
-        items=document_list
+        items=faq_list
     )
 
 
-@router.get("/{document_id}", response_model=Document)
-def get_document(document_id: int, db: Session = Depends(get_db)):
+@router.get("/{faq_id}", response_model=FAQ)
+def get_faq(faq_id: int, db: Session = Depends(get_db)):
     """
-    根据ID获取文档详情
+    根据ID获取常见问题详情
     
-    返回文档的完整信息，包括：
-    - 文档基本信息（标题、描述、地区、人员等）
+    返回常见问题的完整信息，包括：
+    - 常见问题基本信息（标题、描述、模块、人员等）
     - 文件信息（路径、文件名、大小、MIME类型等）
     - 创建时间和更新时间
     
     Args:
-        document_id: 文档ID（路径参数）
+        faq_id: 常见问题ID（路径参数）
         db: 数据库会话对象（自动注入）
         
     Returns:
-        Document: 文档对象，包含所有文档信息和文件元数据
+        FAQ: 常见问题对象，包含所有常见问题信息和文件元数据
         
     Raises:
-        HTTPException 404: 文档不存在
+        HTTPException 404: 常见问题不存在
     """
-    db_document = crud.get_document(db, document_id)
-    if not db_document:
-        raise HTTPException(status_code=404, detail="文档不存在")
+    db_faq = crud.get_faq(db, faq_id)
+    if not db_faq:
+        raise HTTPException(status_code=404, detail="常见问题不存在")
     
     # 清理file_path，确保是相对路径（不包含http://或https://）
-    file_path = db_document.file_path
+    file_path = db_faq.file_path
     if file_path:
         # 如果file_path是绝对路径，提取相对路径部分
         if file_path.startswith("http://") or file_path.startswith("https://"):
@@ -252,103 +252,103 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
         if file_path and not file_path.startswith("/"):
             file_path = f"/{file_path}"
     
-    return Document(
-        id=db_document.id,
-        title=db_document.title,
-        description=db_document.description,
-        region=db_document.region,
-        person=db_document.person,
-        document_type=db_document.document_type,
+    return FAQ(
+        id=db_faq.id,
+        title=db_faq.title,
+        description=db_faq.description,
+        module=db_faq.module,
+        person=db_faq.person,
+        document_type=db_faq.document_type,
         file_path=file_path,
-        file_name=db_document.file_name,
-        file_size=db_document.file_size,
-        mime_type=db_document.mime_type,
-        creator_id=getattr(db_document, "creator_id", None),
-        created_at=db_document.created_at,
-        updated_at=db_document.updated_at
+        file_name=db_faq.file_name,
+        file_size=db_faq.file_size,
+        mime_type=db_faq.mime_type,
+        creator_id=getattr(db_faq, "creator_id", None),
+        created_at=db_faq.created_at,
+        updated_at=db_faq.updated_at
     )
 
 
-@router.put("/{document_id}", response_model=Document)
-def update_document(
-    document_id: int,
-    document_update: DocumentUpdate,
+@router.put("/{faq_id}", response_model=FAQ)
+def update_faq(
+    faq_id: int,
+    faq_update: FAQUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    更新文档信息（部分更新）
+    更新常见问题信息（部分更新）
     
     支持部分更新，只更新请求体中提供的字段，未提供的字段保持不变。
     注意：此接口不支持更新文件，如需更新文件请删除后重新创建。
     
     权限规则：
-    - 管理员可以更新所有文档
-    - 普通用户只能更新自己创建的文档（创建人是user类型的）
-    - 普通用户不能更新管理员创建的文档
+    - 管理员可以更新所有常见问题
+    - 普通用户只能更新自己创建的常见问题（创建人是user类型的）
+    - 普通用户不能更新管理员创建的常见问题
     
     Args:
-        document_id: 要更新的文档ID（路径参数）
-        document_update: 文档更新模型（所有字段都是可选的）
+        faq_id: 要更新的常见问题ID（路径参数）
+        faq_update: 常见问题更新模型（所有字段都是可选的）
         db: 数据库会话对象（自动注入）
         current_user: 当前登录用户（通过Token验证）
         
     Returns:
-        Document: 更新后的文档对象
+        FAQ: 更新后的常见问题对象
         
     Raises:
-        HTTPException 404: 文档不存在
-        HTTPException 403: 无权操作此文档
+        HTTPException 404: 常见问题不存在
+        HTTPException 403: 无权操作此常见问题
     """
-    # 先获取文档，检查权限
-    db_document = crud.get_document(db, document_id)
-    if not db_document:
-        raise HTTPException(status_code=404, detail="文档不存在")
+    # 先获取常见问题，检查权限
+    db_faq = crud.get_faq(db, faq_id)
+    if not db_faq:
+        raise HTTPException(status_code=404, detail="常见问题不存在")
     
     # 检查权限
-    if not check_resource_permission(db_document.creator_id, current_user, db, allow_read=False):
-        raise HTTPException(status_code=403, detail="无权操作此文档")
+    if not check_resource_permission(db_faq.creator_id, current_user, db, allow_read=False):
+        raise HTTPException(status_code=403, detail="无权操作此常见问题")
     
-    db_document = crud.update_document(db, document_id, document_update)
-    if not db_document:
-        raise HTTPException(status_code=404, detail="文档不存在")
+    db_faq = crud.update_faq(db, faq_id, faq_update)
+    if not db_faq:
+        raise HTTPException(status_code=404, detail="常见问题不存在")
     
-    return Document(
-        id=db_document.id,
-        title=db_document.title,
-        description=db_document.description,
-        region=db_document.region,
-        person=db_document.person,
-        document_type=db_document.document_type,
-        file_path=db_document.file_path,
-        file_name=db_document.file_name,
-        file_size=db_document.file_size,
-        mime_type=db_document.mime_type,
-        creator_id=getattr(db_document, "creator_id", None),
-        created_at=db_document.created_at,
-        updated_at=db_document.updated_at
+    return FAQ(
+        id=db_faq.id,
+        title=db_faq.title,
+        description=db_faq.description,
+        module=db_faq.module,
+        person=db_faq.person,
+        document_type=db_faq.document_type,
+        file_path=db_faq.file_path,
+        file_name=db_faq.file_name,
+        file_size=db_faq.file_size,
+        mime_type=db_faq.mime_type,
+        creator_id=getattr(db_faq, "creator_id", None),
+        created_at=db_faq.created_at,
+        updated_at=db_faq.updated_at
     )
 
 
-@router.delete("/{document_id}", status_code=204)
-def delete_document(
-    document_id: int, 
+@router.delete("/{faq_id}", status_code=204)
+def delete_faq(
+    faq_id: int, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    删除文档（同时删除文件）
+    删除常见问题（同时删除文件）
     
-    删除文档时会同时删除服务器上的物理文件。
+    删除常见问题时会同时删除服务器上的物理文件。
     注意：此操作不可恢复，请谨慎使用。
     
     权限规则：
-    - 管理员可以删除所有文档
-    - 普通用户只能删除自己创建的文档（创建人是user类型的）
-    - 普通用户不能删除管理员创建的文档
+    - 管理员可以删除所有常见问题
+    - 普通用户只能删除自己创建的常见问题（创建人是user类型的）
+    - 普通用户不能删除管理员创建的常见问题
     
     Args:
-        document_id: 要删除的文档ID（路径参数）
+        faq_id: 要删除的常见问题ID（路径参数）
         db: 数据库会话对象（自动注入）
         current_user: 当前登录用户（通过Token验证）
         
@@ -356,25 +356,25 @@ def delete_document(
         None: 删除成功返回204状态码
         
     Raises:
-        HTTPException 404: 文档不存在
-        HTTPException 403: 无权操作此文档
+        HTTPException 404: 常见问题不存在
+        HTTPException 403: 无权操作此常见问题
     """
-    # 先获取文档信息，以便删除文件
-    db_document = crud.get_document(db, document_id)
-    if not db_document:
-        raise HTTPException(status_code=404, detail="文档不存在")
+    # 先获取常见问题信息，以便删除文件
+    db_faq = crud.get_faq(db, faq_id)
+    if not db_faq:
+        raise HTTPException(status_code=404, detail="常见问题不存在")
     
     # 检查权限
-    if not check_resource_permission(db_document.creator_id, current_user, db, allow_read=False):
-        raise HTTPException(status_code=403, detail="无权操作此文档")
+    if not check_resource_permission(db_faq.creator_id, current_user, db, allow_read=False):
+        raise HTTPException(status_code=403, detail="无权操作此常见问题")
     
     # 删除文件
-    delete_uploaded_file(db_document.file_path)
+    delete_uploaded_file(db_faq.file_path)
     
     # 删除数据库记录
-    success = crud.delete_document(db, document_id)
+    success = crud.delete_faq(db, faq_id)
     if not success:
-        raise HTTPException(status_code=404, detail="文档不存在")
+        raise HTTPException(status_code=404, detail="常见问题不存在")
     
     return None
 

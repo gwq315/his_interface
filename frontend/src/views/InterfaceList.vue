@@ -88,16 +88,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus, View, Edit, Delete } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { interfaceApi } from '../api/interfaces'
 import { projectApi } from '../api/projects'
+import { getToken } from '../utils/auth'
 
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
+const dataLoaded = ref(false)
 const interfaceList = ref([])
 const searchForm = ref({
   keyword: '',
@@ -186,14 +189,49 @@ const handlePageChange = () => {
 
 const projectOptions = ref([])
 
-onMounted(async () => {
+// 加载数据的函数
+const loadData = async () => {
+  // 如果已经加载过，不再重复加载
+  if (dataLoaded.value) {
+    return
+  }
+  
+  // 检查Token是否存在
+  const token = getToken()
+  if (!token) {
+    return
+  }
+  
+  dataLoaded.value = true
+  
   // 加载项目列表
   try {
     projectOptions.value = await projectApi.getList({ limit: 1000 })
   } catch (error) {
-    console.error('加载项目列表失败:', error)
+    // 如果是401错误，重置dataLoaded状态，以便重试
+    if (error.response?.status === 401) {
+      dataLoaded.value = false
+      return
+    }
   }
   // 加载接口列表
   handleSearch()
+}
+
+// 监听路由变化，确保在路由完全加载后再加载数据
+watch(() => route.path, async () => {
+  // 等待下一个tick，确保组件已完全挂载
+  await nextTick()
+  // 延迟一下，确保Token已准备好
+  await new Promise(resolve => setTimeout(resolve, 300))
+  loadData()
+}, { immediate: false })
+
+onMounted(async () => {
+  // 等待下一个tick，确保组件已完全挂载
+  await nextTick()
+  // 延迟一下，确保Token已准备好
+  await new Promise(resolve => setTimeout(resolve, 500))
+  loadData()
 })
 </script>

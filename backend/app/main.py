@@ -33,7 +33,8 @@ sys.path.insert(0, str(project_root))
 # ========== 导入模块 ==========
 
 from backend.database import init_db
-from backend.app.api import projects, interfaces, parameters, dictionaries, import_export, documents
+from backend.app.api import projects, interfaces, parameters, dictionaries, import_export, documents, faqs, auth
+from backend.app.utils.init_faq_module_dict import init_faq_module_dictionary
 
 # ========== 数据库初始化 ==========
 
@@ -43,6 +44,12 @@ from backend.app.api import projects, interfaces, parameters, dictionaries, impo
 try:
     init_db()
     print("数据库初始化成功")
+    
+    # 初始化常见问题模块字典
+    try:
+        init_faq_module_dictionary()
+    except Exception as e:
+        print(f"警告: 常见问题模块字典初始化失败: {e}")
 except Exception as e:
     print(f"警告: 数据库初始化失败，将在首次请求时重试: {e}")
 
@@ -84,12 +91,14 @@ app.add_middleware(
 # ========== 路由注册 ==========
 
 # 注册所有API路由模块
+app.include_router(auth.router)           # 用户认证路由
 app.include_router(projects.router)        # 项目管理路由
 app.include_router(interfaces.router)     # 接口管理路由
 app.include_router(parameters.router)     # 参数管理路由
 app.include_router(dictionaries.router)   # 字典管理路由
 app.include_router(import_export.router)  # 导入导出路由
 app.include_router(documents.router)      # 文档/截图管理路由
+app.include_router(faqs.router)            # 常见问题路由
 
 # ========== 静态文件服务 ==========
 

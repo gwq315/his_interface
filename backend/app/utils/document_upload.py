@@ -19,6 +19,7 @@ import mimetypes
 # 上传目录基础路径（相对于项目根目录）
 UPLOAD_BASE_DIR = "uploads"
 DOCUMENT_UPLOAD_DIR = "uploads/documents"
+FAQ_UPLOAD_DIR = "uploads/faqs"
 
 # 允许的文件类型
 ALLOWED_PDF_EXTENSIONS = {".pdf"}
@@ -296,6 +297,53 @@ def move_file_to_document_dir(file_path: str, document_id: int) -> str:
     
     # 返回新的相对路径
     return f"{DOCUMENT_UPLOAD_DIR}/{document_id}/{old_path.name}"
+
+
+def ensure_faq_upload_dir(faq_id: Optional[int] = None) -> Path:
+    """
+    确保常见问题上传目录存在
+    
+    Args:
+        faq_id: 常见问题ID（如果提供，创建子目录）
+        
+    Returns:
+        Path: 常见问题上传目录路径
+    """
+    project_root = Path(__file__).parent.parent.parent.parent
+    if faq_id:
+        upload_dir = project_root / FAQ_UPLOAD_DIR / str(faq_id)
+    else:
+        upload_dir = project_root / FAQ_UPLOAD_DIR
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    return upload_dir
+
+
+def move_file_to_faq_dir(file_path: str, faq_id: int) -> str:
+    """
+    将临时文件移动到常见问题目录
+    
+    Args:
+        file_path: 临时文件路径
+        faq_id: 常见问题ID
+        
+    Returns:
+        str: 新的文件相对路径
+    """
+    project_root = Path(__file__).parent.parent.parent.parent
+    old_path = project_root / file_path
+    
+    if not old_path.exists():
+        return file_path
+    
+    # 确保目标目录存在
+    target_dir = ensure_faq_upload_dir(faq_id)
+    
+    # 移动文件
+    new_path = target_dir / old_path.name
+    old_path.rename(new_path)
+    
+    # 返回新的相对路径
+    return f"{FAQ_UPLOAD_DIR}/{faq_id}/{old_path.name}"
 
 
 def delete_uploaded_file(file_path: str) -> bool:

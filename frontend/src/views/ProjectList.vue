@@ -3,7 +3,7 @@
     <div class="toolbar">
       <el-input v-model="keyword" placeholder="搜索项目名称/负责人/描述" clearable style="max-width: 320px" />
       <el-button type="primary" @click="loadData" :loading="loading">查询</el-button>
-      <el-button type="success" @click="openCreate">新建项目</el-button>
+      <el-button v-if="canCreate" type="success" @click="openCreate">新建项目</el-button>
     </div>
 
     <el-table :data="items" v-loading="loading" size="small" border>
@@ -22,10 +22,10 @@
       <el-table-column prop="created_at" label="创建时间" width="180" />
       <el-table-column label="操作" width="280">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+          <el-button v-if="canOperate(row)" link type="primary" @click="openEdit(row)">编辑</el-button>
           <el-button link type="warning" @click="viewDocs(row)">备注</el-button>
           <el-button link type="info" @click="viewAttachments(row)">附件</el-button>
-          <el-button link type="danger" @click="handleDelete(row)" :loading="row._deleting">删除</el-button>
+          <el-button v-if="canOperate(row)" link type="danger" @click="handleDelete(row)" :loading="row._deleting">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -168,6 +168,7 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Upload, Document } from '@element-plus/icons-vue'
 import { projectApi } from '../api/projects'
+import { isAdmin, canOperateProject, getUser } from '../utils/auth'
 
 const loading = ref(false)
 const items = ref([])
@@ -196,6 +197,17 @@ const filterAttachments = (list, category) => {
 
 const pdfAttachments = computed(() => filterAttachments(form.value.attachments, 'pdf'))
 const otherAttachments = computed(() => filterAttachments(form.value.attachments, 'other'))
+
+// 权限检查
+const canCreate = computed(() => {
+  // 所有登录用户都可以创建项目
+  return getUser() !== null
+})
+
+const canOperate = (project) => {
+  // 管理员可以操作所有项目，普通用户只能操作自己创建的项目
+  return canOperateProject(project)
+}
 const dialogPdfAttachments = computed(() => filterAttachments(attachmentsDialog.value.attachments, 'pdf'))
 const dialogOtherAttachments = computed(() => filterAttachments(attachmentsDialog.value.attachments, 'other'))
 
@@ -213,7 +225,11 @@ const loadData = async () => {
   }
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  // 延迟加载，确保Token已准备好
+  await new Promise(resolve => setTimeout(resolve, 100))
+  loadData()
+})
 
 const openCreate = () => {
   dialog.value = { visible: true, isEdit: false, saving: false }
