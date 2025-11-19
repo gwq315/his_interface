@@ -12,7 +12,7 @@
         />
         <el-select 
           v-model="searchForm.document_type" 
-          placeholder="文档类型" 
+          placeholder="规范类型" 
           clearable 
           style="width: 120px"
         >
@@ -20,15 +20,15 @@
           <el-option label="图片" value="image" />
         </el-select>
         <el-button type="primary" @click="loadData" :loading="loading">查询</el-button>
-        <el-button type="success" @click="openCreate">新建文档</el-button>
+        <el-button type="success" @click="openCreate">新建规范</el-button>
       </div>
     </Teleport>
     
     <div class="content-layout">
-      <!-- 左侧文档列表 -->
+      <!-- 左侧规范列表 -->
       <div class="left-panel">
         <div class="list-header">
-          <span>文档列表</span>
+          <span>规范列表</span>
           <span class="total-count">共 {{ total }} 条</span>
         </div>
         <div class="list-content" v-loading="loading">
@@ -67,7 +67,7 @@
               </el-dropdown>
             </div>
           </div>
-          <el-empty v-if="!loading && items.length === 0" description="暂无文档" :image-size="100" />
+          <el-empty v-if="!loading && items.length === 0" description="暂无规范" :image-size="100" />
         </div>
         <div class="list-footer">
           <el-pagination
@@ -192,7 +192,7 @@
           </div>
         </div>
         <div v-else class="preview-placeholder">
-          <el-empty description="请从左侧选择文档进行预览" :image-size="150" />
+          <el-empty description="请从左侧选择规范进行预览" :image-size="150" />
         </div>
       </div>
     </div>
@@ -200,12 +200,12 @@
     <!-- 新增/编辑对话框 -->
     <el-dialog 
       v-model="dialog.visible" 
-      :title="dialog.isEdit ? '编辑文档' : '新建文档'" 
+      :title="dialog.isEdit ? '编辑规范' : '新建规范'" 
       width="700px" 
       :close-on-press-escape="false"
     >
       <el-form :model="form" label-width="100px">
-        <el-form-item label="文档类型" required>
+        <el-form-item label="规范类型" required>
           <el-radio-group v-model="form.document_type" :disabled="dialog.isEdit">
             <el-radio value="pdf">PDF文档</el-radio>
             <el-radio value="image">图片/截图</el-radio>
@@ -690,10 +690,10 @@ function getPreviewUrl(filePath) {
   return getDocumentPreviewUrl(filePath)
 }
 
-// 删除文档
+// 删除规范
 async function handleDelete(row) {
   try {
-    await ElMessageBox.confirm('确定要删除这个文档吗？', '提示', {
+    await ElMessageBox.confirm('确定要删除这个规范吗？', '提示', {
       type: 'warning'
     })
     
@@ -701,7 +701,7 @@ async function handleDelete(row) {
     await deleteDocument(row.id)
     ElMessage.success('删除成功')
     
-    // 如果删除的是当前选中的文档，清空选中
+    // 如果删除的是当前选中的规范，清空选中
     if (selectedDocument.value && selectedDocument.value.id === row.id) {
       selectedDocument.value = null
     }
@@ -743,7 +743,7 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* 左侧文档列表 */
+/* 左侧规范列表 */
 .left-panel {
   width: 350px;
   flex-shrink: 0;

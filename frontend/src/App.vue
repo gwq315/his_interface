@@ -43,7 +43,7 @@
             <el-icon>
               <FolderOpened />
             </el-icon>
-            <span>文档/截图</span>
+            <span>规范/规定</span>
           </el-menu-item>
           <el-menu-item index="/faqs">
             <el-icon>

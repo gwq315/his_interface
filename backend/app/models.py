@@ -139,6 +139,18 @@ class DocumentType(str, enum.Enum):
     IMAGE = "image"  # 图片（截图）
 
 
+class ContentType(str, enum.Enum):
+    """
+    内容类型枚举（用于FAQ）
+    
+    用于区分常见问题的内容类型：
+    - ATTACHMENT: 附件类型（PDF附件）
+    - RICH_TEXT: 富文本类型（图文混排）
+    """
+    ATTACHMENT = "attachment"  # 附件类型
+    RICH_TEXT = "rich_text"    # 富文本类型
+
+
 class Interface(Base):
     """
     接口表模型
@@ -394,8 +406,14 @@ class FAQ(Base):
     module = Column(Unicode(50), comment="模块，常见问题所属模块，关联字典")
     person = Column(Unicode(50), comment="人员，常见问题来源人员")
     
-    # 文档类型字段
-    document_type = Column(Enum(DocumentType), nullable=False, comment="文档类型：pdf（PDF文档）或image（图片/截图）")
+    # 文档类型字段（向后兼容，新数据使用content_type）
+    document_type = Column(Enum(DocumentType), nullable=False, comment="文档类型（向后兼容字段，新数据使用content_type）：pdf（PDF文档）或image（图片/截图）")
+    
+    # 内容类型字段（使用values_callable和native_enum=False确保存储枚举值而不是名称）
+    content_type = Column(Enum(ContentType, values_callable=lambda obj: [e.value for e in obj], native_enum=False, length=20), nullable=True, default=ContentType.ATTACHMENT, comment="内容类型：attachment（附件类型，PDF附件）或rich_text（富文本类型，图文混排）")
+    
+    # 富文本内容字段（使用 UnicodeText 支持中文和HTML）
+    rich_content = Column(UnicodeText, nullable=True, comment="富文本内容，存储HTML格式的图文混排内容，仅在content_type为rich_text时使用")
     
     # 文件信息字段（使用 Unicode 支持中文路径和文件名）
     # 注意：为了向后兼容，file_path/file_name/file_size/mime_type 字段保留，但新数据优先使用attachments字段

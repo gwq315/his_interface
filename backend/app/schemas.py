@@ -19,7 +19,7 @@ Pydantic的优势：
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from datetime import datetime, date
-from backend.app.models import InterfaceType, ParameterType, DocumentType, UserRole
+from backend.app.models import InterfaceType, ParameterType, DocumentType, UserRole, ContentType
 
 # 避免循环引用，使用字符串类型注解
 
@@ -374,7 +374,9 @@ class FAQBase(BaseModel):
     description: Optional[str] = Field(None, description="简要描述")
     module: Optional[str] = Field(None, max_length=50, description="模块")
     person: Optional[str] = Field(None, max_length=50, description="人员")
-    document_type: DocumentType = Field(..., description="文档类型")
+    document_type: DocumentType = Field(..., description="文档类型（向后兼容字段，新数据使用content_type）")
+    content_type: Optional[ContentType] = Field(ContentType.ATTACHMENT, description="内容类型：attachment（附件类型，PDF附件）或rich_text（富文本类型，图文混排）")
+    rich_content: Optional[str] = Field(None, description="富文本内容，HTML格式，仅在content_type为rich_text时使用")
 
 
 class FAQCreate(FAQBase):
@@ -388,6 +390,8 @@ class FAQUpdate(BaseModel):
     description: Optional[str] = None
     module: Optional[str] = Field(None, max_length=50)
     person: Optional[str] = Field(None, max_length=50)
+    content_type: Optional[ContentType] = None
+    rich_content: Optional[str] = None
 
 
 class FAQ(FAQBase):
@@ -398,6 +402,7 @@ class FAQ(FAQBase):
     file_size: Optional[int] = Field(None, description="文件大小（向后兼容字段，新数据使用attachments）")
     mime_type: Optional[str] = None
     attachments: Optional[List[Dict[str, Any]]] = Field(default=[], description="附件列表，JSON格式，包含文件名、存储路径、大小、MIME类型、上传时间等信息")
+    rich_content: Optional[str] = Field(None, description="富文本内容，HTML格式，仅在content_type为rich_text时使用")
     creator_id: Optional[int] = Field(None, description="创建人ID")
     created_at: datetime
     updated_at: datetime

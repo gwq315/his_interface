@@ -1,11 +1,11 @@
 import api from './index'
 
 /**
- * 文档/截图API
+ * 规范/规定API
  */
 
 /**
- * 获取文档列表
+ * 获取规范列表
  * @param {Object} params - 查询参数
  * @param {string} params.keyword - 关键词（搜索标题、简要描述）
  * @param {string} params.document_type - 文档类型（pdf/image）
@@ -27,7 +27,7 @@ export function getDocument(id) {
 }
 
 /**
- * 创建文档/截图
+ * 创建规范/规定
  * @param {FormData} formData - 表单数据（包含文件）
  */
 export function createDocument(formData) {

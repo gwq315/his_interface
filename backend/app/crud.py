@@ -1209,28 +1209,29 @@ def delete_document(db: Session, document_id: int) -> bool:
 
 # ========== 常见问题相关 CRUD 操作 ==========
 
-def create_faq(db: Session, faq: FAQCreate, file_path: str, file_name: str, file_size: int, mime_type: Optional[str] = None, creator_id: Optional[int] = None) -> FAQ:
+def create_faq(db: Session, faq: FAQCreate, file_path: Optional[str] = None, file_name: Optional[str] = None, file_size: Optional[int] = None, mime_type: Optional[str] = None, creator_id: Optional[int] = None) -> FAQ:
     """
     创建新常见问题
     
     创建常见问题时会自动设置创建人ID（如果提供），用于权限控制。
-    常见问题信息包括文件路径、文件名、大小等元数据。
+    常见问题信息包括文件路径、文件名、大小等元数据（附件类型）或富文本内容（富文本类型）。
     
     Args:
         db: 数据库会话对象
         faq: 常见问题创建模型，包含常见问题基本信息（标题、描述、模块、人员等）
-        file_path: 文件相对路径（相对于项目根目录）
-        file_name: 原始文件名（用户上传时的文件名）
-        file_size: 文件大小（字节）
-        mime_type: MIME类型（可选，如application/pdf、image/png）
+        file_path: 文件相对路径（相对于项目根目录，仅附件类型需要）
+        file_name: 原始文件名（用户上传时的文件名，仅附件类型需要）
+        file_size: 文件大小（字节，仅附件类型需要）
+        mime_type: MIME类型（可选，如application/pdf，仅附件类型需要）
         creator_id: 创建人ID（可选），如果提供则设置为常见问题的创建人
         
     Returns:
-        FAQ: 创建成功的常见问题对象，包含所有常见问题信息和文件元数据
+        FAQ: 创建成功的常见问题对象，包含所有常见问题信息和文件元数据或富文本内容
         
     Note:
         - 常见问题创建时会自动设置created_at和updated_at时间戳
         - 创建人ID用于后续的权限控制
+        - 富文本类型不需要文件相关参数
     """
     db_faq = FAQ(
         **faq.model_dump(),

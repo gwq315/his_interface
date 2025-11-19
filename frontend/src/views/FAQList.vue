@@ -11,13 +11,13 @@
           @keyup.enter="loadData"
         />
         <el-select 
-          v-model="searchForm.document_type" 
-          placeholder="文档类型" 
+          v-model="searchForm.content_type" 
+          placeholder="内容类型" 
           clearable 
           style="width: 120px"
         >
-          <el-option label="PDF" value="pdf" />
-          <el-option label="图片" value="image" />
+          <el-option label="附件" value="attachment" />
+          <el-option label="富文本" value="rich_text" />
         </el-select>
         <el-select 
           v-model="searchForm.module" 
@@ -55,11 +55,11 @@
           >
             <div class="item-header">
               <el-tag 
-                :type="item.document_type === 'pdf' ? 'primary' : 'success'" 
+                :type="item.content_type === 'rich_text' ? 'success' : 'primary'" 
                 size="small"
                 style="margin-right: 4px;"
               >
-                {{ item.document_type === 'pdf' ? 'PDF' : '图片' }}
+                {{ item.content_type === 'rich_text' ? '富文本' : '附件' }}
               </el-tag>
               <span class="item-title">{{ item.title }}</span>
             </div>
@@ -102,8 +102,8 @@
             <div class="preview-title">
               <h3>{{ selectedFAQ.title }}</h3>
               <div class="preview-meta">
-                <el-tag :type="selectedFAQ.document_type === 'pdf' ? 'primary' : 'success'" size="small">
-                  {{ selectedFAQ.document_type === 'pdf' ? 'PDF' : '图片' }}
+                <el-tag :type="selectedFAQ.content_type === 'rich_text' ? 'success' : 'primary'" size="small">
+                  {{ selectedFAQ.content_type === 'rich_text' ? '富文本' : '附件' }}
                 </el-tag>
                 <span class="meta-item" v-if="selectedFAQ.module">模块：{{ selectedFAQ.module }}</span>
                 <span class="meta-item" v-if="selectedFAQ.person">人员：{{ selectedFAQ.person }}</span>
@@ -112,15 +112,19 @@
             </div>
           </div>
           <div class="preview-body">
-            <!-- PDF预览：只显示第一个附件 -->
-            <div v-if="selectedFAQ.document_type === 'pdf'" class="pdf-preview">
+            <!-- 附件类型：PDF预览 -->
+            <div v-if="selectedFAQ.content_type === 'attachment' || !selectedFAQ.content_type" class="pdf-preview">
               <iframe 
                 :src="getPreviewUrl(getFirstAttachmentPath(selectedFAQ))" 
                 class="preview-iframe"
               />
             </div>
-            <!-- 图片预览：支持多个图片按顺序浏览 -->
-            <div v-else class="image-preview">
+            <!-- 富文本类型：显示富文本内容 -->
+            <div v-else-if="selectedFAQ.content_type === 'rich_text'" class="rich-text-preview">
+              <div class="rich-content" v-html="selectedFAQ.rich_content || ''"></div>
+            </div>
+            <!-- 向后兼容：图片预览（旧数据） -->
+            <div v-else-if="selectedFAQ.document_type === 'image'" class="image-preview">
               <div v-if="getImageAttachments(selectedFAQ).length > 0" class="image-viewer">
                 <div class="image-container">
                   <!-- 左侧切换箭头（浮动） -->
@@ -218,10 +222,10 @@
       :close-on-press-escape="false"
     >
       <el-form :model="form" label-width="100px">
-        <el-form-item label="文档类型" required>
-          <el-radio-group v-model="form.document_type" :disabled="dialog.isEdit">
-            <el-radio value="pdf">PDF文档</el-radio>
-            <el-radio value="image">图片/截图</el-radio>
+        <el-form-item label="内容类型" required>
+          <el-radio-group v-model="form.content_type" :disabled="dialog.isEdit">
+            <el-radio value="attachment">附件类型（PDF）</el-radio>
+            <el-radio value="rich_text">富文本类型（图文混排）</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="标题" required>
@@ -244,44 +248,29 @@
           <el-input v-model="form.person" maxlength="50" show-word-limit />
         </el-form-item>
         
-        <!-- 文件上传 -->
-        <el-form-item :label="dialog.isEdit ? '附件管理' : '文件'" :required="!dialog.isEdit">
-          <!-- 新建时：支持多文件上传 -->
+        <!-- 附件类型：文件上传 -->
+        <el-form-item 
+          v-if="form.content_type === 'attachment' || !form.content_type"
+          :label="dialog.isEdit ? '附件管理' : '文件'" 
+          :required="!dialog.isEdit"
+        >
+          <!-- 新建时：PDF文件上传 -->
           <div v-if="!dialog.isEdit">
-            <div v-if="form.document_type === 'pdf'">
-              <el-upload
-                ref="uploadRef"
-                :auto-upload="false"
-                :on-change="handleFileChange"
-                :show-file-list="true"
-                accept=".pdf"
-                :limit="1"
-              >
-                <el-button type="primary" :icon="Upload">选择PDF文件</el-button>
-                <template #tip>
-                  <div class="el-upload__tip" style="color: #999; font-size: 12px; margin-top: 8px;">
-                    仅支持PDF格式，最大50MB，只能上传一个文件
-                  </div>
-                </template>
-              </el-upload>
-            </div>
-            <div v-else>
-              <el-upload
-                ref="uploadRef"
-                :auto-upload="false"
-                :on-change="handleFileChange"
-                :show-file-list="true"
-                accept="image/*"
-                :multiple="true"
-              >
-                <el-button type="primary" :icon="Upload">选择图片文件（可多选）</el-button>
-                <template #tip>
-                  <div class="el-upload__tip" style="color: #999; font-size: 12px; margin-top: 8px;">
-                    支持多个图片文件，最大50MB/文件
-                  </div>
-                </template>
-              </el-upload>
-            </div>
+            <el-upload
+              ref="uploadRef"
+              :auto-upload="false"
+              :on-change="handleFileChange"
+              :show-file-list="true"
+              accept=".pdf"
+              :limit="1"
+            >
+              <el-button type="primary" :icon="Upload">选择PDF文件</el-button>
+              <template #tip>
+                <div class="el-upload__tip" style="color: #999; font-size: 12px; margin-top: 8px;">
+                  仅支持PDF格式，最大50MB，只能上传一个文件
+                </div>
+              </template>
+            </el-upload>
           </div>
           
           <!-- 编辑时：显示附件列表，支持添加和删除 -->
@@ -292,14 +281,13 @@
                 :key="index"
                 class="attachment-item"
               >
-                <el-icon><Document v-if="form.document_type === 'pdf'" /><Picture v-else /></el-icon>
+                <el-icon><Document /></el-icon>
                 <span class="attachment-name">{{ attachment.filename }}</span>
                 <el-button 
                   link 
                   type="danger" 
                   size="small"
                   @click="handleDeleteAttachment(index)"
-                  :disabled="form.document_type === 'pdf' && form.attachments.length === 1"
                 >
                   删除
                 </el-button>
@@ -314,17 +302,29 @@
                 :auto-upload="false"
                 :on-change="handleAddAttachment"
                 :show-file-list="false"
-                :accept="form.document_type === 'pdf' ? '.pdf' : 'image/*'"
+                accept=".pdf"
               >
-                <el-button type="primary" :icon="Upload" size="small">
-                  {{ form.document_type === 'pdf' ? '添加PDF文件' : '添加图片文件' }}
-                </el-button>
+                <el-button type="primary" :icon="Upload" size="small">添加PDF文件</el-button>
               </el-upload>
-              <div v-if="form.document_type === 'pdf'" style="color: #999; font-size: 12px; margin-top: 4px;">
-                注意：PDF文件只能有一个附件
+              <div style="color: #999; font-size: 12px; margin-top: 4px;">
+                注意：附件类型只能有一个PDF文件
               </div>
             </div>
           </div>
+        </el-form-item>
+        
+        <!-- 富文本类型：富文本编辑器 -->
+        <el-form-item 
+          v-if="form.content_type === 'rich_text'"
+          label="富文本内容" 
+          :required="!dialog.isEdit"
+        >
+          <QuillEditor
+            v-model:content="form.rich_content"
+            contentType="html"
+            :options="editorOptions"
+            style="height: 400px;"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -340,6 +340,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, ElImageViewer } from 'element-plus'
 import { Upload, Document, Picture, MoreFilled, PictureFilled, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { QuillEditor } from '@vueup/vue-quill'
+import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import { getFAQs, createFAQ, updateFAQ, deleteFAQ, getFAQPreviewUrl, addFAQAttachment, deleteFAQAttachment } from '../api/faqs'
 import { dictionaryApi } from '../api/dictionaries'
 
@@ -355,7 +357,7 @@ const moduleOptions = ref([])
 
 const searchForm = reactive({
   keyword: '',
-  document_type: null,
+  content_type: null,
   module: null
 })
 
@@ -365,11 +367,29 @@ const form = reactive({
   description: '',
   module: '',
   person: '',
-  document_type: 'pdf',
+  document_type: 'pdf', // 向后兼容字段
+  content_type: 'attachment', // 内容类型：attachment 或 rich_text
+  rich_content: '', // 富文本内容
   file: null, // 向后兼容：单个文件（用于新建）
   files: [], // 多个文件（用于新建，支持多文件上传）
   attachments: [] // 附件列表（用于编辑）
 })
+
+// 富文本编辑器配置
+const editorOptions = {
+  theme: 'snow',
+  modules: {
+    toolbar: [
+      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'color': [] }, { 'background': [] }],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      [{ 'align': [] }],
+      ['link', 'image'],
+      ['clean']
+    ]
+  }
+}
 
 const dialog = reactive({
   visible: false,
@@ -409,7 +429,7 @@ async function loadData() {
       page: page.value,
       page_size: pageSize.value,
       keyword: searchForm.keyword || undefined,
-      document_type: searchForm.document_type || undefined,
+      document_type: 'pdf', // 向后兼容，统一使用pdf
       module: searchForm.module || undefined
     }
     const res = await getFAQs(params)
@@ -432,7 +452,9 @@ function openCreate() {
     description: '',
     module: '',
     person: '',
-    document_type: 'pdf',
+    document_type: 'pdf', // 向后兼容字段
+    content_type: 'attachment', // 默认附件类型
+    rich_content: '', // 富文本内容
     file: null,
     files: [],
     attachments: []
@@ -468,7 +490,9 @@ function openEdit(row) {
     description: row.description || '',
     module: row.module || '',
     person: row.person || '',
-    document_type: row.document_type,
+    document_type: row.document_type || 'pdf', // 向后兼容
+    content_type: row.content_type || 'attachment', // 内容类型
+    rich_content: row.rich_content || '', // 富文本内容
     file: null,
     attachments: attachments
   })
@@ -542,10 +566,17 @@ async function submit() {
     return
   }
   
-  if (!dialog.isEdit) {
-    // 新建
-    if (!form.files || form.files.length === 0) {
-      ElMessage.warning('请选择文件')
+  // 验证内容类型
+  if (form.content_type === 'attachment') {
+    // 附件类型：新建时必须上传文件
+    if (!dialog.isEdit && (!form.files || form.files.length === 0)) {
+      ElMessage.warning('请选择PDF文件')
+      return
+    }
+  } else if (form.content_type === 'rich_text') {
+    // 富文本类型：必须提供富文本内容
+    if (!form.rich_content || !form.rich_content.trim()) {
+      ElMessage.warning('请输入富文本内容')
       return
     }
   }
@@ -559,7 +590,9 @@ async function submit() {
         title: form.title,
         description: form.description,
         module: form.module,
-        person: form.person
+        person: form.person,
+        content_type: form.content_type,
+        rich_content: form.content_type === 'rich_text' ? form.rich_content : null
       })
       ElMessage.success('更新成功')
       // 更新选中的常见问题信息
@@ -568,23 +601,31 @@ async function submit() {
           title: form.title,
           description: form.description,
           module: form.module,
-          person: form.person
+          person: form.person,
+          content_type: form.content_type,
+          rich_content: form.rich_content
         })
       }
     } else {
-      // 创建 - 支持多文件上传
+      // 创建
       const formData = new FormData()
       formData.append('title', form.title)
       formData.append('description', form.description || '')
       formData.append('module', form.module || '')
       formData.append('person', form.person || '')
-      formData.append('document_type', form.document_type)
+      formData.append('document_type', 'pdf') // 向后兼容，统一使用pdf
+      formData.append('content_type', form.content_type)
       
-      // 添加所有文件
-      if (form.files && form.files.length > 0) {
-        form.files.forEach(file => {
-          formData.append('files', file)
-        })
+      if (form.content_type === 'rich_text') {
+        // 富文本类型：添加富文本内容
+        formData.append('rich_content', form.rich_content)
+      } else {
+        // 附件类型：添加PDF文件
+        if (form.files && form.files.length > 0) {
+          form.files.forEach(file => {
+            formData.append('files', file)
+          })
+        }
       }
       
       res = await createFAQ(formData)
@@ -993,6 +1034,58 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   min-height: 400px;
+}
+
+/* 富文本预览样式 */
+.rich-text-preview {
+  flex: 1;
+  min-height: 400px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: auto;
+  padding: 20px;
+  background: #fff;
+}
+
+.rich-content {
+  width: 100%;
+  min-height: 200px;
+  line-height: 1.6;
+  color: #303133;
+}
+
+.rich-content :deep(img) {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 10px 0;
+}
+
+.rich-content :deep(p) {
+  margin: 10px 0;
+}
+
+.rich-content :deep(h1),
+.rich-content :deep(h2),
+.rich-content :deep(h3),
+.rich-content :deep(h4),
+.rich-content :deep(h5),
+.rich-content :deep(h6) {
+  margin: 20px 0 10px 0;
+  font-weight: bold;
+}
+
+.rich-content :deep(ul),
+.rich-content :deep(ol) {
+  margin: 10px 0;
+  padding-left: 30px;
+}
+
+.rich-content :deep(blockquote) {
+  border-left: 4px solid #409eff;
+  padding-left: 15px;
+  margin: 10px 0;
+  color: #606266;
 }
 
 .preview-image {

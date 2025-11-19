@@ -24,7 +24,7 @@ from backend.app.schemas import (
 from backend.app.utils.document_upload import (
     save_uploaded_file, delete_uploaded_file, move_file_to_faq_dir
 )
-from backend.app.models import DocumentType, FAQ as FAQModel
+from backend.app.models import DocumentType, ContentType, FAQ as FAQModel
 from backend.app.api.auth import get_current_user
 from backend.app.models import User
 from backend.app.utils.permissions import check_resource_permission
@@ -84,6 +84,8 @@ def _build_faq_response(db_faq: FAQModel) -> FAQ:
         module=db_faq.module,
         person=db_faq.person,
         document_type=db_faq.document_type,
+        content_type=getattr(db_faq, "content_type", ContentType.ATTACHMENT),
+        rich_content=getattr(db_faq, "rich_content", None),
         file_path=_normalize_file_path(db_faq.file_path) if db_faq.file_path else None,
         file_name=db_faq.file_name,
         file_size=db_faq.file_size,
@@ -101,17 +103,19 @@ def create_faq(
     description: Optional[str] = Form(None, description="简要描述"),
     module: Optional[str] = Form(None, max_length=50, description="模块"),
     person: Optional[str] = Form(None, max_length=50, description="人员"),
-    document_type: str = Form(..., description="文档类型"),
-    files: List[UploadFile] = File(..., description="上传的文件（支持多个文件）"),
+    document_type: str = Form(..., description="文档类型（向后兼容字段）"),
+    content_type: Optional[str] = Form(ContentType.ATTACHMENT.value, description="内容类型：attachment（附件类型，PDF附件）或rich_text（富文本类型）"),
+    rich_content: Optional[str] = Form(None, description="富文本内容，HTML格式，仅在content_type为rich_text时使用"),
+    files: Optional[List[UploadFile]] = File(None, description="上传的文件（仅attachment类型需要，只支持PDF）"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     创建新常见问题
     
-    支持上传PDF或图片文件（PNG、JPG、JPEG等）。
-    支持一次上传多个文件（图片类型可以上传多个，PDF类型建议只上传一个）。
-    文件会先保存到临时目录，创建记录后再移动到常见问题目录。
+    支持两种内容类型：
+    1. attachment（附件类型）：必须上传PDF文件，不支持图片
+    2. rich_text（富文本类型）：使用富文本编辑器编辑图文混排内容，不需要上传文件
     
     权限说明：
     - 所有登录用户都可以创建常见问题
@@ -122,26 +126,30 @@ def create_faq(
         description: 简要描述（可选）
         module: 模块（可选，最大50字符）
         person: 人员（可选，最大50字符）
-        document_type: 文档类型（必填，必须是'pdf'或'image'）
-        files: 上传的文件对象列表（必填，至少一个文件，支持PDF或图片格式）
+        document_type: 文档类型（必填，向后兼容字段，必须是'pdf'）
+        content_type: 内容类型（可选，默认'attachment'，必须是'attachment'或'rich_text'）
+        rich_content: 富文本内容（可选，仅在content_type为'rich_text'时使用）
+        files: 上传的文件对象列表（可选，仅在content_type为'attachment'时必填，只支持PDF格式）
         db: 数据库会话对象（自动注入）
         current_user: 当前登录用户（通过Token验证）
         
     Returns:
-        FAQ: 创建成功的常见问题对象，包含文件信息和元数据
+        FAQ: 创建成功的常见问题对象，包含文件信息或富文本内容
         
     Raises:
-        HTTPException 400: 文档类型无效或文件列表为空
+        HTTPException 400: 内容类型无效、文件列表为空或文件格式不正确
         HTTPException 500: 文件保存失败
     """
-    # 验证文件列表不为空
-    if not files or len(files) == 0:
+    # 验证内容类型
+    try:
+        content_type_enum = ContentType(content_type)
+    except ValueError:
         raise HTTPException(
             status_code=400,
-            detail="至少需要上传一个文件"
+            detail=f"无效的内容类型：{content_type}，必须是 'attachment' 或 'rich_text'"
         )
     
-    # 验证文档类型
+    # 验证文档类型（向后兼容，新数据统一使用pdf）
     try:
         doc_type = DocumentType(document_type)
     except ValueError:
@@ -150,46 +158,82 @@ def create_faq(
             detail=f"无效的文档类型：{document_type}，必须是 'pdf' 或 'image'"
         )
     
-    # PDF类型建议只上传一个文件
-    if doc_type == DocumentType.PDF and len(files) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail="PDF文档类型建议只上传一个文件，如需上传多个请使用图片类型"
-        )
-    
-    # 处理所有上传的文件
-    attachments_list = []
-    first_file_path = None
-    
-    for file in files:
-        file_info = save_uploaded_file(file, doc_type.value)
+    # 根据内容类型进行不同的处理
+    if content_type_enum == ContentType.RICH_TEXT:
+        # 富文本类型：不需要文件，只需要富文本内容
+        if not rich_content or not rich_content.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="富文本类型必须提供富文本内容"
+            )
         
-        # 创建常见问题记录（只在处理第一个文件时创建）
-        if first_file_path is None:
-            faq_data = FAQCreate(
-                title=title,
-                description=description,
-                module=module,
-                person=person,
-                document_type=doc_type
+        # 创建常见问题记录（富文本类型）
+        faq_data = FAQCreate(
+            title=title,
+            description=description,
+            module=module,
+            person=person,
+            document_type=DocumentType.PDF,  # 向后兼容，统一使用pdf
+            content_type=content_type_enum,
+            rich_content=rich_content
+        )
+        
+        db_faq = crud.create_faq(db, faq_data, creator_id=current_user.id)
+        db.commit()
+        db.refresh(db_faq)
+        
+        return _build_faq_response(db_faq)
+    
+    else:
+        # 附件类型：必须上传PDF文件
+        if not files or len(files) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="附件类型必须上传至少一个PDF文件"
             )
-            
-            db_faq = crud.create_faq(
-                db=db,
-                faq=faq_data,
-                file_path=file_info["file_path"],
-                file_name=file_info["filename"],
-                file_size=file_info["file_size"],
-                mime_type=file_info["mime_type"],
-                creator_id=current_user.id
+        
+        # 验证所有文件都是PDF格式
+        for file in files:
+            if not file.filename.lower().endswith('.pdf'):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"附件类型只支持PDF文件，不支持文件：{file.filename}"
+                )
+        
+        # PDF类型只允许上传一个文件
+        if len(files) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="附件类型只允许上传一个PDF文件"
             )
-            
-            # 将文件移动到常见问题目录
-            new_file_path = move_file_to_faq_dir(file_info["file_path"], db_faq.id)
-            first_file_path = new_file_path
-        else:
-            # 后续文件直接移动到常见问题目录
-            new_file_path = move_file_to_faq_dir(file_info["file_path"], db_faq.id)
+        
+        # 处理PDF文件上传
+        file = files[0]  # 只处理第一个文件（附件类型只允许一个）
+        file_info = save_uploaded_file(file, DocumentType.PDF.value)
+        
+        # 创建常见问题记录
+        faq_data = FAQCreate(
+            title=title,
+            description=description,
+            module=module,
+            person=person,
+            document_type=DocumentType.PDF,  # 向后兼容，统一使用pdf
+            content_type=content_type_enum,
+            rich_content=None
+        )
+        
+        db_faq = crud.create_faq(
+            db=db,
+            faq=faq_data,
+            file_path=file_info["file_path"],
+            file_name=file_info["filename"],
+            file_size=file_info["file_size"],
+            mime_type=file_info["mime_type"],
+            creator_id=current_user.id
+        )
+        
+        # 将文件移动到常见问题目录
+        new_file_path = move_file_to_faq_dir(file_info["file_path"], db_faq.id)
         
         # 构建附件信息
         attachment_info = {
@@ -200,17 +244,16 @@ def create_faq(
             "mime_type": file_info["mime_type"],
             "upload_time": file_info["upload_time"]
         }
-        attachments_list.append(attachment_info)
-    
-    # 更新数据库：保存attachments和file_path（向后兼容）
-    db_faq.file_path = first_file_path
-    db.query(FAQModel).filter(FAQModel.id == db_faq.id).update({
-        "attachments": json.dumps(attachments_list, ensure_ascii=False)
-    })
-    db.commit()
-    db.refresh(db_faq)
-    
-    return _build_faq_response(db_faq)
+        
+        # 更新数据库：保存attachments和file_path（向后兼容）
+        db_faq.file_path = new_file_path
+        db.query(FAQModel).filter(FAQModel.id == db_faq.id).update({
+            "attachments": json.dumps([attachment_info], ensure_ascii=False)
+        })
+        db.commit()
+        db.refresh(db_faq)
+        
+        return _build_faq_response(db_faq)
 
 
 @router.get("", response_model=FAQListResponse)
