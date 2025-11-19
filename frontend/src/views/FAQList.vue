@@ -218,7 +218,7 @@
     <el-dialog 
       v-model="dialog.visible" 
       :title="dialog.isEdit ? '编辑常见问题' : '新建常见问题'" 
-      width="700px" 
+      width="80%" 
       :close-on-press-escape="false"
     >
       <el-form :model="form" label-width="100px">
@@ -231,9 +231,8 @@
         <el-form-item label="标题" required>
           <el-input v-model="form.title" />
         </el-form-item>
-        <el-form-item label="简要描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" />
-        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
         <el-form-item label="模块">
           <el-select v-model="form.module" placeholder="请选择模块" clearable style="width: 100%">
             <el-option 
@@ -244,9 +243,16 @@
             />
           </el-select>
         </el-form-item>
+      </el-col>
+      <el-col :span="12">
         <el-form-item label="人员">
           <el-input v-model="form.person" maxlength="50" show-word-limit />
         </el-form-item>
+      </el-col>
+    </el-row>
+        <el-form-item label="简要描述">
+          <el-input v-model="form.description" type="textarea" :rows="3" />
+        </el-form-item>        
         
         <!-- 附件类型：文件上传 -->
         <el-form-item 
@@ -267,7 +273,7 @@
               <el-button type="primary" :icon="Upload">选择PDF文件</el-button>
               <template #tip>
                 <div class="el-upload__tip" style="color: #999; font-size: 12px; margin-top: 8px;">
-                  仅支持PDF格式，最大50MB，只能上传一个文件
+                  仅支持PDF格式，最大100MB，只能上传一个文件
                 </div>
               </template>
             </el-upload>
@@ -319,12 +325,14 @@
           label="富文本内容" 
           :required="!dialog.isEdit"
         >
-          <QuillEditor
-            v-model:content="form.rich_content"
-            contentType="html"
-            :options="editorOptions"
-            style="height: 400px;"
-          />
+          <div class="rich-text-editor-wrapper">
+            <QuillEditor
+              v-model:content="form.rich_content"
+              contentType="html"
+              :options="editorOptions"
+              class="rich-text-editor"
+            />
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -559,6 +567,15 @@ async function handleDeleteAttachment(index) {
   }
 }
 
+// 检查富文本内容是否为空（去除HTML标签后检查）
+function isRichContentEmpty(content) {
+  if (!content) return true
+  // 去除HTML标签，只保留文本内容
+  const textContent = content.replace(/<[^>]*>/g, '').trim()
+  // 检查是否只包含空白字符或换行符
+  return !textContent || textContent.length === 0
+}
+
 // 提交表单
 async function submit() {
   if (!form.title.trim()) {
@@ -575,7 +592,7 @@ async function submit() {
     }
   } else if (form.content_type === 'rich_text') {
     // 富文本类型：必须提供富文本内容
-    if (!form.rich_content || !form.rich_content.trim()) {
+    if (isRichContentEmpty(form.rich_content)) {
       ElMessage.warning('请输入富文本内容')
       return
     }
@@ -608,27 +625,37 @@ async function submit() {
       }
     } else {
       // 创建
-      const formData = new FormData()
-      formData.append('title', form.title)
-      formData.append('description', form.description || '')
-      formData.append('module', form.module || '')
-      formData.append('person', form.person || '')
-      formData.append('document_type', 'pdf') // 向后兼容，统一使用pdf
-      formData.append('content_type', form.content_type)
-      
       if (form.content_type === 'rich_text') {
-        // 富文本类型：添加富文本内容
-        formData.append('rich_content', form.rich_content)
+        // 富文本类型：使用 JSON 方式提交
+        const jsonData = {
+          title: form.title,
+          description: form.description || '',
+          module: form.module || '',
+          person: form.person || '',
+          document_type: 'pdf', // 向后兼容，统一使用pdf
+          content_type: form.content_type,
+          rich_content: form.rich_content || ''
+        }
+        res = await createFAQ(jsonData, true)
       } else {
-        // 附件类型：添加PDF文件
+        // 附件类型：使用 FormData 方式提交
+        const formData = new FormData()
+        formData.append('title', form.title)
+        formData.append('description', form.description || '')
+        formData.append('module', form.module || '')
+        formData.append('person', form.person || '')
+        formData.append('document_type', 'pdf') // 向后兼容，统一使用pdf
+        formData.append('content_type', form.content_type)
+        
+        // 添加PDF文件
         if (form.files && form.files.length > 0) {
           form.files.forEach(file => {
             formData.append('files', file)
           })
         }
+        
+        res = await createFAQ(formData, false)
       }
-      
-      res = await createFAQ(formData)
       ElMessage.success('创建成功')
     }
     
@@ -643,7 +670,8 @@ async function submit() {
       }
     }
   } catch (error) {
-    ElMessage.error(error.message || '操作失败')
+    const errorMessage = error.response?.data?.detail || error.message || '操作失败'
+    ElMessage.error(errorMessage)
   } finally {
     dialog.saving = false
   }
@@ -1086,6 +1114,35 @@ onMounted(async () => {
   padding-left: 15px;
   margin: 10px 0;
   color: #606266;
+}
+
+/* 富文本编辑器样式 */
+.rich-text-editor-wrapper {
+  width: 100%;
+  display: block;
+}
+
+.rich-text-editor {
+  width: 85%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 确保工具栏在顶部 */
+.rich-text-editor :deep(.ql-toolbar) {
+  order: 1;
+  border-bottom: 1px solid #ccc;
+}
+
+/* 确保编辑容器在工具栏下方 */
+.rich-text-editor :deep(.ql-container) {
+  order: 2;
+  height: 200px;
+  border-top: none;
+}
+
+.rich-text-editor :deep(.ql-editor) {
+  min-height: 200px;
 }
 
 .preview-image {

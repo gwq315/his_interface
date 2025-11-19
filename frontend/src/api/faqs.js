@@ -8,12 +8,15 @@ export const getFAQById = (id) => {
   return api.get(`/faqs/${id}`)
 }
 
-export const createFAQ = (formData) => {
-  return api.post('/faqs', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  })
+export const createFAQ = (data, isRichText = false) => {
+  if (isRichText) {
+    // 富文本类型：使用 JSON 方式提交
+    return api.post('/faqs', data)
+  } else {
+    // 附件类型：使用 FormData 方式提交
+    // 注意：不要手动设置 Content-Type，让浏览器自动设置（包括 boundary）
+    return api.post('/faqs', data)
+  }
 }
 
 export const updateFAQ = (id, data) => {

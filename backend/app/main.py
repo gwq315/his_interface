@@ -23,6 +23,37 @@ from starlette.responses import FileResponse
 import sys
 from pathlib import Path
 import mimetypes
+import os
+
+# 增加 FormData 的大小限制（50MB）
+# 通过 monkey patch 修改 starlette.formparsers.MultiPartParser 的默认 max_part_size
+try:
+    from starlette.formparsers import MultiPartParser
+    import inspect
+    
+    # 保存原始的 __init__ 方法
+    _original_init = MultiPartParser.__init__
+    
+    # 获取原始方法的签名
+    sig = inspect.signature(_original_init)
+    params = list(sig.parameters.keys())
+    
+    def _patched_init(self, *args, **kwargs):
+        # 如果 max_part_size 未指定，使用 50MB 作为默认值
+        if 'max_part_size' not in kwargs:
+            kwargs['max_part_size'] = 50 * 1024 * 1024  # 50MB
+        elif kwargs.get('max_part_size') is None:
+            kwargs['max_part_size'] = 50 * 1024 * 1024  # 50MB
+        
+        return _original_init(self, *args, **kwargs)
+    
+    # 应用 monkey patch
+    MultiPartParser.__init__ = _patched_init
+    print("已成功应用 FormData 大小限制 patch（50MB）")
+except Exception as e:
+    # 如果导入或 patch 失败，记录警告但继续运行
+    print(f"警告: FormData 大小限制 patch 失败: {e}")
+    pass
 
 # ========== 路径配置 ==========
 

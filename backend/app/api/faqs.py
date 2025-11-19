@@ -12,10 +12,11 @@
 创建时间: 2024
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List, Dict, Any, Union
 import json
+import re
 from backend.database import get_db
 from backend.app import crud
 from backend.app.schemas import (
@@ -98,38 +99,24 @@ def _build_faq_response(db_faq: FAQModel) -> FAQ:
 
 
 @router.post("", response_model=FAQ, status_code=201)
-def create_faq(
-    title: str = Form(..., description="标题"),
-    description: Optional[str] = Form(None, description="简要描述"),
-    module: Optional[str] = Form(None, max_length=50, description="模块"),
-    person: Optional[str] = Form(None, max_length=50, description="人员"),
-    document_type: str = Form(..., description="文档类型（向后兼容字段）"),
-    content_type: Optional[str] = Form(ContentType.ATTACHMENT.value, description="内容类型：attachment（附件类型，PDF附件）或rich_text（富文本类型）"),
-    rich_content: Optional[str] = Form(None, description="富文本内容，HTML格式，仅在content_type为rich_text时使用"),
-    files: Optional[List[UploadFile]] = File(None, description="上传的文件（仅attachment类型需要，只支持PDF）"),
+async def create_faq(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     创建新常见问题
     
-    支持两种内容类型：
-    1. attachment（附件类型）：必须上传PDF文件，不支持图片
-    2. rich_text（富文本类型）：使用富文本编辑器编辑图文混排内容，不需要上传文件
+    支持两种内容类型和两种提交方式：
+    1. attachment（附件类型）：使用 multipart/form-data，必须上传PDF文件
+    2. rich_text（富文本类型）：使用 application/json，提交富文本内容
     
     权限说明：
     - 所有登录用户都可以创建常见问题
     - 创建的常见问题会自动设置创建人为当前登录用户
     
     Args:
-        title: 常见问题标题（必填）
-        description: 简要描述（可选）
-        module: 模块（可选，最大50字符）
-        person: 人员（可选，最大50字符）
-        document_type: 文档类型（必填，向后兼容字段，必须是'pdf'）
-        content_type: 内容类型（可选，默认'attachment'，必须是'attachment'或'rich_text'）
-        rich_content: 富文本内容（可选，仅在content_type为'rich_text'时使用）
-        files: 上传的文件对象列表（可选，仅在content_type为'attachment'时必填，只支持PDF格式）
+        request: FastAPI Request 对象，根据 Content-Type 自动选择解析方式
         db: 数据库会话对象（自动注入）
         current_user: 当前登录用户（通过Token验证）
         
@@ -140,6 +127,70 @@ def create_faq(
         HTTPException 400: 内容类型无效、文件列表为空或文件格式不正确
         HTTPException 500: 文件保存失败
     """
+    # 根据 Content-Type 选择不同的解析方式
+    content_type_header = request.headers.get("content-type", "").lower()
+    
+    if "application/json" in content_type_header:
+        # JSON 方式：用于富文本类型
+        try:
+            body = await request.json()
+            title = body.get("title")
+            description = body.get("description")
+            module = body.get("module")
+            person = body.get("person")
+            document_type = body.get("document_type", "pdf")
+            content_type = body.get("content_type", ContentType.RICH_TEXT.value)
+            rich_content = body.get("rich_content")
+            files = None  # JSON 方式不支持文件上传
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"JSON 解析失败: {str(e)}")
+    else:
+        # FormData 方式：用于附件类型
+        # 注意：request.form() 只能调用一次，因为请求体流只能读取一次
+        try:
+            form_data = await request.form()
+            
+            # 从 FormData 中提取字段
+            title = form_data.get("title")
+            if not title:
+                raise HTTPException(status_code=400, detail="标题不能为空")
+            if not isinstance(title, str):
+                title = str(title) if title else ""
+            
+            description = form_data.get("description")
+            description = description if isinstance(description, str) else (str(description) if description else None)
+            
+            module = form_data.get("module")
+            module = module if isinstance(module, str) else (str(module) if module else None)
+            
+            person = form_data.get("person")
+            person = person if isinstance(person, str) else (str(person) if person else None)
+            
+            document_type = form_data.get("document_type")
+            document_type = document_type if isinstance(document_type, str) else (str(document_type) if document_type else None)
+            
+            content_type = form_data.get("content_type", ContentType.ATTACHMENT.value)
+            content_type = content_type if isinstance(content_type, str) else (str(content_type) if content_type else ContentType.ATTACHMENT.value)
+            
+            rich_content = form_data.get("rich_content")
+            if rich_content and not isinstance(rich_content, str):
+                rich_content = str(rich_content)
+            
+            # 获取文件列表
+            # FormData 中的文件字段会作为 UploadFile 对象返回
+            file_items = form_data.getlist("files")
+            files = [f for f in file_items if hasattr(f, 'read') and hasattr(f, 'filename')]
+                
+        except Exception as e:
+            error_msg = str(e)
+            
+            if "exceeded maximum size" in error_msg.lower() or "max_part_size" in error_msg.lower() or "max_size" in error_msg.lower():
+                raise HTTPException(
+                    status_code=413,
+                    detail="请求体过大，请使用 JSON 方式提交富文本内容"
+                )
+            raise HTTPException(status_code=400, detail=f"表单数据解析失败: {error_msg}")
+    
     # 验证内容类型
     try:
         content_type_enum = ContentType(content_type)
@@ -161,10 +212,18 @@ def create_faq(
     # 根据内容类型进行不同的处理
     if content_type_enum == ContentType.RICH_TEXT:
         # 富文本类型：不需要文件，只需要富文本内容
-        if not rich_content or not rich_content.strip():
+        # 检查富文本内容是否为空（去除HTML标签后检查）
+        if not rich_content:
             raise HTTPException(
                 status_code=400,
                 detail="富文本类型必须提供富文本内容"
+            )
+        # 去除HTML标签，只保留文本内容
+        text_content = re.sub(r'<[^>]+>', '', rich_content).strip()
+        if not text_content:
+            raise HTTPException(
+                status_code=400,
+                detail="富文本内容不能为空，请输入有效的文本内容"
             )
         
         # 创建常见问题记录（富文本类型）
