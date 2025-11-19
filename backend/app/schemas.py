@@ -284,6 +284,19 @@ class InterfaceListResponse(BaseModel):
 
 # ========== 文档/截图相关 Schema ==========
 
+class DocumentAttachment(BaseModel):
+    """文档附件模型"""
+    filename: str = Field(..., description="原始文件名")
+    stored_filename: str = Field(..., description="存储的文件名（带时间戳）")
+    file_path: str = Field(..., description="文件相对路径")
+    file_size: int = Field(..., description="文件大小（字节）")
+    mime_type: Optional[str] = Field(None, description="MIME类型")
+    upload_time: str = Field(..., description="上传时间（ISO格式）")
+    
+    class Config:
+        from_attributes = True
+
+
 class DocumentBase(BaseModel):
     """文档基础模型"""
     title: str = Field(..., description="标题")
@@ -309,10 +322,11 @@ class DocumentUpdate(BaseModel):
 class Document(DocumentBase):
     """文档响应模型"""
     id: int
-    file_path: str
-    file_name: str
-    file_size: int
+    file_path: Optional[str] = Field(None, description="文件路径（向后兼容字段，新数据使用attachments）")
+    file_name: Optional[str] = Field(None, description="文件名（向后兼容字段，新数据使用attachments）")
+    file_size: Optional[int] = Field(None, description="文件大小（向后兼容字段，新数据使用attachments）")
     mime_type: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = Field(default=[], description="附件列表，JSON格式，包含文件名、存储路径、大小、MIME类型、上传时间等信息")
     creator_id: Optional[int] = Field(None, description="创建人ID")
     created_at: datetime
     updated_at: datetime
@@ -341,6 +355,19 @@ class DocumentListResponse(BaseModel):
 
 # ========== 常见问题相关 Schema ==========
 
+class FAQAttachment(BaseModel):
+    """常见问题附件模型"""
+    filename: str = Field(..., description="原始文件名")
+    stored_filename: str = Field(..., description="存储的文件名（带时间戳）")
+    file_path: str = Field(..., description="文件相对路径")
+    file_size: int = Field(..., description="文件大小（字节）")
+    mime_type: Optional[str] = Field(None, description="MIME类型")
+    upload_time: str = Field(..., description="上传时间（ISO格式）")
+    
+    class Config:
+        from_attributes = True
+
+
 class FAQBase(BaseModel):
     """常见问题基础模型"""
     title: str = Field(..., description="标题")
@@ -366,10 +393,11 @@ class FAQUpdate(BaseModel):
 class FAQ(FAQBase):
     """常见问题响应模型"""
     id: int
-    file_path: str
-    file_name: str
-    file_size: int
+    file_path: Optional[str] = Field(None, description="文件路径（向后兼容字段，新数据使用attachments）")
+    file_name: Optional[str] = Field(None, description="文件名（向后兼容字段，新数据使用attachments）")
+    file_size: Optional[int] = Field(None, description="文件大小（向后兼容字段，新数据使用attachments）")
     mime_type: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = Field(default=[], description="附件列表，JSON格式，包含文件名、存储路径、大小、MIME类型、上传时间等信息")
     creator_id: Optional[int] = Field(None, description="创建人ID")
     created_at: datetime
     updated_at: datetime

@@ -29,3 +29,27 @@ export const getFAQPreviewUrl = (filePath) => {
   return filePath.startsWith('/') ? filePath : `/${filePath}`
 }
 
+/**
+ * 为常见问题添加附件
+ * @param {number} id - 常见问题ID
+ * @param {File} file - 文件对象
+ */
+export const addFAQAttachment = (id, file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post(`/faqs/${id}/attachments`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
+/**
+ * 删除常见问题的指定附件
+ * @param {number} id - 常见问题ID
+ * @param {string} storedFilename - 存储的文件名（带时间戳）
+ */
+export const deleteFAQAttachment = (id, storedFilename) => {
+  return api.delete(`/faqs/${id}/attachments/${storedFilename}`)
+}
+

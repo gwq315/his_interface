@@ -113,7 +113,9 @@ def check_resource_permission(creator_id: Optional[int], current_user: User, db:
             ...
     """
     # 管理员可以操作所有资源
-    if current_user.role == UserRole.ADMIN:
+    # 兼容枚举值和字符串值两种形式
+    user_role = current_user.role.value if hasattr(current_user.role, 'value') else current_user.role
+    if user_role == UserRole.ADMIN.value or user_role == 'admin':
         return True
     
     # 如果资源没有创建人，只有管理员可以操作
@@ -130,7 +132,8 @@ def check_resource_permission(creator_id: Optional[int], current_user: User, db:
     
     # 如果创建人是admin，普通用户不能修改/删除
     # allow_read参数控制是否允许普通用户读取admin创建的资源
-    if creator.role == UserRole.ADMIN:
+    creator_role = creator.role.value if hasattr(creator.role, 'value') else creator.role
+    if creator_role == UserRole.ADMIN.value or creator_role == 'admin':
         return allow_read
     
     # 如果创建人是user，只有创建人自己可以操作

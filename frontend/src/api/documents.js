@@ -78,3 +78,27 @@ export function getDocumentPreviewUrl(filePath) {
   return relativePath
 }
 
+/**
+ * 为文档添加附件
+ * @param {number} id - 文档ID
+ * @param {File} file - 文件对象
+ */
+export function addDocumentAttachment(id, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post(`/documents/${id}/attachments`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
+/**
+ * 删除文档的指定附件
+ * @param {number} id - 文档ID
+ * @param {string} storedFilename - 存储的文件名（带时间戳）
+ */
+export function deleteDocumentAttachment(id, storedFilename) {
+  return api.delete(`/documents/${id}/attachments/${storedFilename}`)
+}
+

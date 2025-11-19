@@ -14,7 +14,8 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List, Dict, Any, Union
+import json
 from backend.database import get_db
 from backend.app import crud
 from backend.app.schemas import (
@@ -23,12 +24,75 @@ from backend.app.schemas import (
 from backend.app.utils.document_upload import (
     save_uploaded_file, delete_uploaded_file, move_file_to_document_dir
 )
-from backend.app.models import DocumentType
+from backend.app.models import DocumentType, Document as DocumentModel
 from backend.app.api.auth import get_current_user
 from backend.app.models import User
 from backend.app.utils.permissions import check_resource_permission
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
+
+
+def _ensure_list(value) -> List[Dict[str, Any]]:
+    """确保值是列表格式"""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except:
+            return []
+    if isinstance(value, list):
+        return value
+    return []
+
+
+def _normalize_file_path(file_path: str) -> str:
+    """标准化文件路径"""
+    if not file_path:
+        return None
+    # 如果file_path是绝对路径，提取相对路径部分
+    if file_path.startswith("http://") or file_path.startswith("https://"):
+        from urllib.parse import urlparse
+        parsed = urlparse(file_path)
+        file_path = parsed.path
+    # 确保路径以/开头（如果还没有）
+    if file_path and not file_path.startswith("/"):
+        file_path = f"/{file_path}"
+    return file_path
+
+
+def _build_document_response(db_document: DocumentModel) -> Document:
+    """构建文档响应对象，处理向后兼容"""
+    # 处理attachments
+    attachments = _ensure_list(db_document.attachments)
+    
+    # 向后兼容：如果attachments为空但file_path存在，转换为attachments格式
+    if not attachments and db_document.file_path:
+        attachments = [{
+            "filename": db_document.file_name or "未知文件",
+            "stored_filename": db_document.file_path.split("/")[-1] if db_document.file_path else "",
+            "file_path": _normalize_file_path(db_document.file_path) or "",
+            "file_size": db_document.file_size or 0,
+            "mime_type": db_document.mime_type,
+            "upload_time": db_document.created_at.isoformat() if db_document.created_at else ""
+        }]
+    
+    return Document(
+        id=db_document.id,
+        title=db_document.title,
+        description=db_document.description,
+        region=db_document.region,
+        person=db_document.person,
+        document_type=db_document.document_type,
+        file_path=_normalize_file_path(db_document.file_path) if db_document.file_path else None,
+        file_name=db_document.file_name,
+        file_size=db_document.file_size,
+        mime_type=db_document.mime_type,
+        attachments=attachments,
+        creator_id=getattr(db_document, "creator_id", None),
+        created_at=db_document.created_at,
+        updated_at=db_document.updated_at
+    )
 
 
 @router.post("", response_model=Document, status_code=201)
@@ -38,7 +102,7 @@ def create_document(
     region: Optional[str] = Form(None, max_length=50, description="地区"),
     person: Optional[str] = Form(None, max_length=50, description="人员"),
     document_type: str = Form(..., description="文档类型"),
-    file: UploadFile = File(..., description="上传的文件"),
+    files: List[UploadFile] = File(..., description="上传的文件（支持多个文件）"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -46,6 +110,7 @@ def create_document(
     创建新文档/截图
     
     支持上传PDF或图片文件（PNG、JPG、JPEG等）。
+    支持一次上传多个文件（图片类型可以上传多个，PDF类型建议只上传一个）。
     文件会先保存到临时目录，创建记录后再移动到文档目录。
     
     权限说明：
@@ -58,7 +123,7 @@ def create_document(
         region: 地区（可选，最大50字符）
         person: 人员（可选，最大50字符）
         document_type: 文档类型（必填，必须是'pdf'或'image'）
-        file: 上传的文件对象（必填，支持PDF或图片格式）
+        files: 上传的文件对象列表（必填，至少一个文件，支持PDF或图片格式）
         db: 数据库会话对象（自动注入）
         current_user: 当前登录用户（通过Token验证）
         
@@ -66,9 +131,16 @@ def create_document(
         Document: 创建成功的文档对象，包含文件信息和元数据
         
     Raises:
-        HTTPException 400: 文档类型无效
+        HTTPException 400: 文档类型无效或文件列表为空
         HTTPException 500: 文件保存失败
     """
+    # 验证文件列表不为空
+    if not files or len(files) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="至少需要上传一个文件"
+        )
+    
     # 验证文档类型
     try:
         doc_type = DocumentType(document_type)
@@ -78,47 +150,67 @@ def create_document(
             detail=f"无效的文档类型：{document_type}，必须是 'pdf' 或 'image'"
         )
     
-    file_info = save_uploaded_file(file, doc_type.value)
+    # PDF类型建议只上传一个文件
+    if doc_type == DocumentType.PDF and len(files) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="PDF文档类型建议只上传一个文件，如需上传多个请使用图片类型"
+        )
     
-    # 创建文档记录（先保存到临时位置）
-    document_data = DocumentCreate(
-        title=title,
-        description=description,
-        region=region,
-        person=person,
-        document_type=doc_type
-    )
+    # 处理所有上传的文件
+    attachments_list = []
+    first_file_path = None
     
-    db_document = crud.create_document(
-        db=db,
-        document=document_data,
-        file_path=file_info["file_path"],
-        file_name=file_info["filename"],
-        file_size=file_info["file_size"],
-        mime_type=file_info["mime_type"],
-        creator_id=current_user.id
-    )
+    for file in files:
+        file_info = save_uploaded_file(file, doc_type.value)
+        
+        # 创建文档记录（只在处理第一个文件时创建）
+        if first_file_path is None:
+            document_data = DocumentCreate(
+                title=title,
+                description=description,
+                region=region,
+                person=person,
+                document_type=doc_type
+            )
+            
+            db_document = crud.create_document(
+                db=db,
+                document=document_data,
+                file_path=file_info["file_path"],
+                file_name=file_info["filename"],
+                file_size=file_info["file_size"],
+                mime_type=file_info["mime_type"],
+                creator_id=current_user.id
+            )
+            
+            # 将文件移动到文档目录
+            new_file_path = move_file_to_document_dir(file_info["file_path"], db_document.id)
+            first_file_path = new_file_path
+        else:
+            # 后续文件直接移动到文档目录
+            new_file_path = move_file_to_document_dir(file_info["file_path"], db_document.id)
+        
+        # 构建附件信息
+        attachment_info = {
+            "filename": file_info["filename"],
+            "stored_filename": file_info["stored_filename"],
+            "file_path": new_file_path,
+            "file_size": file_info["file_size"],
+            "mime_type": file_info["mime_type"],
+            "upload_time": file_info["upload_time"]
+        }
+        attachments_list.append(attachment_info)
     
-    # 将文件移动到文档目录
-    new_file_path = move_file_to_document_dir(file_info["file_path"], db_document.id)
-    db_document.file_path = new_file_path
+    # 更新数据库：保存attachments和file_path（向后兼容）
+    db_document.file_path = first_file_path
+    db.query(DocumentModel).filter(DocumentModel.id == db_document.id).update({
+        "attachments": json.dumps(attachments_list, ensure_ascii=False)
+    })
     db.commit()
     db.refresh(db_document)
     
-    return Document(
-        id=db_document.id,
-        title=db_document.title,
-        description=db_document.description,
-        region=db_document.region,
-        person=db_document.person,
-        document_type=db_document.document_type,
-        file_path=db_document.file_path,
-        file_name=db_document.file_name,
-        file_size=db_document.file_size,
-        mime_type=db_document.mime_type,
-        created_at=db_document.created_at,
-        updated_at=db_document.updated_at
-    )
+    return _build_document_response(db_document)
 
 
 @router.get("", response_model=DocumentListResponse)
@@ -177,36 +269,10 @@ def get_documents(
         is_admin=current_user.role.value == 'admin'
     )
     
-    # 转换为响应模型，确保file_path是相对路径
+    # 转换为响应模型
     document_list = []
     for item in items:
-        # 清理file_path，确保是相对路径（不包含http://或https://）
-        file_path = item.file_path
-        if file_path:
-            # 如果file_path是绝对路径，提取相对路径部分
-            if file_path.startswith("http://") or file_path.startswith("https://"):
-                from urllib.parse import urlparse
-                parsed = urlparse(file_path)
-                file_path = parsed.path
-            # 确保路径以/开头（如果还没有）
-            if file_path and not file_path.startswith("/"):
-                file_path = f"/{file_path}"
-        
-        document_list.append(Document(
-            id=item.id,
-            title=item.title,
-            description=item.description,
-            region=item.region,
-            person=item.person,
-            document_type=item.document_type,
-            file_path=file_path,
-            file_name=item.file_name,
-            file_size=item.file_size,
-            mime_type=item.mime_type,
-            creator_id=getattr(item, "creator_id", None),
-            created_at=item.created_at,
-            updated_at=item.updated_at
-        ))
+        document_list.append(_build_document_response(item))
     
     return DocumentListResponse(
         total=total,
@@ -240,33 +306,7 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
     if not db_document:
         raise HTTPException(status_code=404, detail="文档不存在")
     
-    # 清理file_path，确保是相对路径（不包含http://或https://）
-    file_path = db_document.file_path
-    if file_path:
-        # 如果file_path是绝对路径，提取相对路径部分
-        if file_path.startswith("http://") or file_path.startswith("https://"):
-            from urllib.parse import urlparse
-            parsed = urlparse(file_path)
-            file_path = parsed.path
-        # 确保路径以/开头（如果还没有）
-        if file_path and not file_path.startswith("/"):
-            file_path = f"/{file_path}"
-    
-    return Document(
-        id=db_document.id,
-        title=db_document.title,
-        description=db_document.description,
-        region=db_document.region,
-        person=db_document.person,
-        document_type=db_document.document_type,
-        file_path=file_path,
-        file_name=db_document.file_name,
-        file_size=db_document.file_size,
-        mime_type=db_document.mime_type,
-        creator_id=getattr(db_document, "creator_id", None),
-        created_at=db_document.created_at,
-        updated_at=db_document.updated_at
-    )
+    return _build_document_response(db_document)
 
 
 @router.put("/{document_id}", response_model=Document)
@@ -313,21 +353,7 @@ def update_document(
     if not db_document:
         raise HTTPException(status_code=404, detail="文档不存在")
     
-    return Document(
-        id=db_document.id,
-        title=db_document.title,
-        description=db_document.description,
-        region=db_document.region,
-        person=db_document.person,
-        document_type=db_document.document_type,
-        file_path=db_document.file_path,
-        file_name=db_document.file_name,
-        file_size=db_document.file_size,
-        mime_type=db_document.mime_type,
-        creator_id=getattr(db_document, "creator_id", None),
-        created_at=db_document.created_at,
-        updated_at=db_document.updated_at
-    )
+    return _build_document_response(db_document)
 
 
 @router.delete("/{document_id}", status_code=204)
@@ -368,8 +394,16 @@ def delete_document(
     if not check_resource_permission(db_document.creator_id, current_user, db, allow_read=False):
         raise HTTPException(status_code=403, detail="无权操作此文档")
     
-    # 删除文件
-    delete_uploaded_file(db_document.file_path)
+    # 删除所有附件文件
+    attachments = _ensure_list(db_document.attachments)
+    if attachments:
+        # 删除attachments中的所有文件
+        for attachment in attachments:
+            if attachment.get("file_path"):
+                delete_uploaded_file(attachment["file_path"])
+    elif db_document.file_path:
+        # 向后兼容：删除旧格式的文件
+        delete_uploaded_file(db_document.file_path)
     
     # 删除数据库记录
     success = crud.delete_document(db, document_id)
@@ -377,4 +411,127 @@ def delete_document(
         raise HTTPException(status_code=404, detail="文档不存在")
     
     return None
+
+
+@router.post("/{document_id}/attachments", response_model=Document)
+def add_document_attachment(
+    document_id: int,
+    file: UploadFile = File(..., description="上传的文件"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    为文档添加附件
+    
+    权限规则：
+    - 管理员可以为所有文档添加附件
+    - 普通用户只能为自己创建的文档添加附件
+    
+    Args:
+        document_id: 文档ID
+        file: 上传的文件对象
+        db: 数据库会话对象
+        current_user: 当前登录用户
+        
+    Returns:
+        Document: 更新后的文档对象
+    """
+    db_document = crud.get_document(db, document_id)
+    if not db_document:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    
+    # 检查权限
+    if not check_resource_permission(db_document.creator_id, current_user, db, allow_read=False):
+        raise HTTPException(status_code=403, detail="无权操作此文档")
+    
+    # 验证文件类型（根据文档类型）
+    doc_type = db_document.document_type.value
+    file_info = save_uploaded_file(file, doc_type)
+    
+    # 将文件移动到文档目录
+    new_file_path = move_file_to_document_dir(file_info["file_path"], document_id)
+    
+    # 构建附件信息
+    attachment_info = {
+        "filename": file_info["filename"],
+        "stored_filename": file_info["stored_filename"],
+        "file_path": new_file_path,
+        "file_size": file_info["file_size"],
+        "mime_type": file_info["mime_type"],
+        "upload_time": file_info["upload_time"]
+    }
+    
+    # 更新attachments列表
+    attachments = _ensure_list(db_document.attachments)
+    attachments.append(attachment_info)
+    
+    # 更新数据库
+    db.query(DocumentModel).filter(DocumentModel.id == document_id).update({
+        "attachments": json.dumps(attachments, ensure_ascii=False)
+    })
+    db.commit()
+    db.refresh(db_document)
+    
+    return _build_document_response(db_document)
+
+
+@router.delete("/{document_id}/attachments/{stored_filename}", response_model=Document)
+def delete_document_attachment(
+    document_id: int,
+    stored_filename: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    删除文档的指定附件
+    
+    权限规则：
+    - 管理员可以删除所有文档的附件
+    - 普通用户只能删除自己创建的文档的附件
+    
+    Args:
+        document_id: 文档ID
+        stored_filename: 存储的文件名（带时间戳）
+        db: 数据库会话对象
+        current_user: 当前登录用户
+        
+    Returns:
+        Document: 更新后的文档对象
+    """
+    db_document = crud.get_document(db, document_id)
+    if not db_document:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    
+    # 检查权限
+    if not check_resource_permission(db_document.creator_id, current_user, db, allow_read=False):
+        raise HTTPException(status_code=403, detail="无权操作此文档")
+    
+    # 获取attachments列表
+    attachments = _ensure_list(db_document.attachments)
+    
+    # 查找并删除指定附件
+    attachment_to_delete = None
+    for attachment in attachments:
+        if attachment.get("stored_filename") == stored_filename:
+            attachment_to_delete = attachment
+            break
+    
+    if not attachment_to_delete:
+        raise HTTPException(status_code=404, detail="附件不存在")
+    
+    # 删除文件
+    if attachment_to_delete.get("file_path"):
+        delete_uploaded_file(attachment_to_delete["file_path"])
+    
+    # 从列表中移除
+    attachments.remove(attachment_to_delete)
+    
+    # 更新数据库
+    db.query(DocumentModel).filter(DocumentModel.id == document_id).update({
+        "attachments": json.dumps(attachments, ensure_ascii=False) if attachments else None
+    })
+    db.commit()
+    db.refresh(db_document)
+    
+    return _build_document_response(db_document)
 

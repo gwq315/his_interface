@@ -398,10 +398,15 @@ class FAQ(Base):
     document_type = Column(Enum(DocumentType), nullable=False, comment="文档类型：pdf（PDF文档）或image（图片/截图）")
     
     # 文件信息字段（使用 Unicode 支持中文路径和文件名）
-    file_path = Column(Unicode(500), nullable=False, comment="文件相对路径，可能包含中文，如：uploads/faqs/1/1704067200_文档.pdf")
-    file_name = Column(Unicode(200), nullable=False, comment="原始文件名，可能包含中文")
-    file_size = Column(Integer, nullable=False, comment="文件大小（字节）")
-    mime_type = Column(String(100), comment="MIME类型，如application/pdf、image/png、image/jpeg")
+    # 注意：为了向后兼容，file_path/file_name/file_size/mime_type 字段保留，但新数据优先使用attachments字段
+    file_path = Column(Unicode(500), nullable=True, comment="文件相对路径（向后兼容字段，新数据使用attachments），可能包含中文，如：uploads/faqs/1/1704067200_文档.pdf")
+    file_name = Column(Unicode(200), nullable=True, comment="原始文件名（向后兼容字段，新数据使用attachments），可能包含中文")
+    file_size = Column(Integer, nullable=True, comment="文件大小（字节）（向后兼容字段，新数据使用attachments）")
+    mime_type = Column(String(100), comment="MIME类型（向后兼容字段，新数据使用attachments），如application/pdf、image/png、image/jpeg")
+    
+    # 附件字段（JSON格式存储多个附件信息）
+    # 格式示例：[{"filename": "文档.pdf", "stored_filename": "1704067200_文档.pdf", "file_path": "uploads/faqs/1/1704067200_文档.pdf", "file_size": 1024000, "mime_type": "application/pdf", "upload_time": "2024-01-01T10:00:00"}, ...]
+    attachments = Column(JSON, nullable=True, comment="附件列表，JSON格式，包含文件名、存储路径、大小、MIME类型、上传时间等信息")
     
     # 创建人字段（用于权限控制）
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True, comment="创建人ID，外键关联users表，用于权限控制")
@@ -500,10 +505,15 @@ class Document(Base):
     document_type = Column(Enum(DocumentType), nullable=False, comment="文档类型：pdf（PDF文档）或image（图片/截图）")
     
     # 文件信息字段（使用 Unicode 支持中文路径和文件名）
-    file_path = Column(Unicode(500), nullable=False, comment="文件相对路径，可能包含中文，如：uploads/documents/1/1704067200_文档.pdf")
-    file_name = Column(Unicode(200), nullable=False, comment="原始文件名，可能包含中文")
-    file_size = Column(Integer, nullable=False, comment="文件大小（字节）")
-    mime_type = Column(String(100), comment="MIME类型，如application/pdf、image/png、image/jpeg")
+    # 注意：为了向后兼容，file_path/file_name/file_size/mime_type 字段保留，但新数据优先使用attachments字段
+    file_path = Column(Unicode(500), nullable=True, comment="文件相对路径（向后兼容字段，新数据使用attachments），可能包含中文，如：uploads/documents/1/1704067200_文档.pdf")
+    file_name = Column(Unicode(200), nullable=True, comment="原始文件名（向后兼容字段，新数据使用attachments），可能包含中文")
+    file_size = Column(Integer, nullable=True, comment="文件大小（字节）（向后兼容字段，新数据使用attachments）")
+    mime_type = Column(String(100), comment="MIME类型（向后兼容字段，新数据使用attachments），如application/pdf、image/png、image/jpeg")
+    
+    # 附件字段（JSON格式存储多个附件信息）
+    # 格式示例：[{"filename": "文档.pdf", "stored_filename": "1704067200_文档.pdf", "file_path": "uploads/documents/1/1704067200_文档.pdf", "file_size": 1024000, "mime_type": "application/pdf", "upload_time": "2024-01-01T10:00:00"}, ...]
+    attachments = Column(JSON, nullable=True, comment="附件列表，JSON格式，包含文件名、存储路径、大小、MIME类型、上传时间等信息")
     
     # 创建人字段（用于权限控制）
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True, comment="创建人ID，外键关联users表，用于权限控制")
