@@ -1,20 +1,21 @@
 <template>
   <div>
-    <el-card>
-      <template #header>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span>字典管理</span>
-          <el-button type="primary" @click="handleAdd" :icon="Plus">新增字典</el-button>
-        </div>
-      </template>
-
-      <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
-        <el-select v-model="projectId" placeholder="全部项目" clearable style="width: 220px;">
+    <!-- 搜索条件传送到header -->
+    <Teleport to=".header-center">
+      <div class="header-search">
+        <el-select v-model="projectId" placeholder="全部项目" clearable style="width: 200px;">
           <el-option v-for="p in projectOptions" :key="p.id" :label="p.name" :value="p.id" />
         </el-select>
-        <el-input v-model="keyword" placeholder="搜索字典名称/编码/描述" clearable style="max-width: 260px;" />
+        <el-input v-model="keyword" placeholder="搜索字典名称/编码/描述" clearable style="max-width: 250px;" />
         <el-button type="primary" @click="loadDictionaries" :loading="loading">查询</el-button>
+        <el-button type="success" @click="handleAdd" :icon="Plus">新增字典</el-button>
       </div>
+    </Teleport>
+    
+    <el-card>
+      <template #header>
+        <span>字典管理</span>
+      </template>
 
       <el-table :data="dictionaryList" v-loading="loading" stripe>
         <el-table-column prop="code" label="字典编码" width="140" />
@@ -296,6 +297,12 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.header-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .values-toolbar { margin-bottom: 8px; }
 </style>
 

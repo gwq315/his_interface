@@ -1,9 +1,14 @@
 <template>
   <el-container v-if="showLayout" style="height: 100vh">
-    <el-header style="background-color: #409eff; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
-      <h1 style="margin: 0; font-size: 20px;">医院HIS系统接口文档管理系统</h1>
-      <div style="display: flex; align-items: center; gap: 15px;">
-        <span v-if="currentUser">{{ currentUser.name }} ({{ currentUser.role === 'admin' ? '管理员' : '普通人员' }})</span>
+    <el-header class="app-header">
+      <div class="header-left">
+        <h1 class="header-title">医院HIS系统接口文档管理系统</h1>
+      </div>
+      <div class="header-center">
+        <!-- 搜索条件通过Teleport传送到这里 -->
+      </div>
+      <div class="header-right">
+        <span v-if="currentUser" class="user-info">{{ currentUser.name }} ({{ currentUser.role === 'admin' ? '管理员' : '普通人员' }})</span>
         <el-button type="danger" size="small" @click="handleLogout">退出</el-button>
       </div>
     </el-header>
@@ -170,3 +175,62 @@ const handleLogout = async () => {
   }
 }
 </script>
+
+<style scoped>
+.app-header {
+  background-color: #409eff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  gap: 20px;
+  min-height: 60px;
+}
+
+.header-left {
+  flex-shrink: 0;
+  min-width: 200px;
+}
+
+.header-title {
+  margin: 0;
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+.header-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.header-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  min-width: 200px;
+  justify-content: flex-end;
+}
+
+.user-info {
+  white-space: nowrap;
+}
+
+/* 搜索组件样式覆盖 */
+.header-center :deep(.el-input) {
+  max-width: 250px;
+}
+
+.header-center :deep(.el-select) {
+  max-width: 150px;
+}
+
+.header-center :deep(.el-button) {
+  margin-left: 0;
+}
+</style>

@@ -1,52 +1,20 @@
 <template>
   <div>
-    <div style="margin-bottom: 20px;">
-      <el-card>
-        <el-form :model="searchForm" inline>
-          <el-form-item label="关键词">
-            <el-input v-model="searchForm.keyword" placeholder="搜索接口名称、编码、描述" clearable style="width: 300px;" />
-          </el-form-item>
-          <el-form-item label="项目">
-            <el-select v-model="searchForm.project_id" placeholder="全部项目" clearable style="width: 200px;">
-              <el-option v-for="p in projectOptions" :key="p.id" :label="p.name" :value="p.id" />
-            </el-select>
-          </el-form-item>
-          <!-- <el-form-item label="接口类型">
-            <el-select v-model="searchForm.interface_type" placeholder="全部" clearable style="width: 150px;">
-              <el-option label="视图接口" value="view" />
-              <el-option label="API接口" value="api" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="分类">
-            <el-input
-              v-model="searchForm.category"
-              placeholder="分类"
-              clearable
-              style="width: 150px;"
-            />
-          </el-form-item> -->
-          <el-form-item>
-            <el-button type="primary" @click="handleSearch" :icon="Search">搜索</el-button>
-            <el-button @click="handleReset" :icon="Refresh">重置</el-button>
-          </el-form-item>
-        </el-form>
-      </el-card>
-    </div>
-
+    <!-- 搜索条件传送到header -->
+    <Teleport to=".header-center">
+      <div class="header-search">
+        <el-input v-model="searchForm.keyword" placeholder="搜索接口名称、编码、描述" clearable style="max-width: 250px;" />
+        <el-select v-model="searchForm.project_id" placeholder="全部项目" clearable style="width: 200px;">
+          <el-option v-for="p in projectOptions" :key="p.id" :label="p.name" :value="p.id" />
+        </el-select>
+        <el-button type="primary" @click="handleSearch" :icon="Search">搜索</el-button>
+        <el-button type="success" @click="$router.push('/interfaces/add')" :icon="Plus">新增接口</el-button>
+      </div>
+    </Teleport>
+    
     <el-card>
-      <!-- <template #header>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span>接口列表</span>
-          <el-button type="primary" @click="$router.push('/interfaces/add')" :icon="Plus">新增接口</el-button>
-        </div>
-      </template> -->
       <template #header>
-        <div style="display: flex; align-items: center; gap: 20px;">
-          <span>接口列表</span>
-
-          <el-button type="primary" @click="$router.push('/interfaces/add')" :icon="Plus">新增接口</el-button>
-
-        </div>
+        <span>接口列表</span>
       </template>
 
       <el-table :data="interfaceList" v-loading="loading" stripe>
@@ -90,7 +58,7 @@
 <script setup>
 import { ref, onMounted, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, Plus, View, Edit, Delete } from '@element-plus/icons-vue'
+import { Search, Plus, View, Edit, Delete } from '@element-plus/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
 import { interfaceApi } from '../api/interfaces'
 import { projectApi } from '../api/projects'
@@ -235,3 +203,11 @@ onMounted(async () => {
   loadData()
 })
 </script>
+
+<style scoped>
+.header-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+</style>

@@ -1,10 +1,13 @@
 <template>
   <div class="page">
-    <div class="toolbar">
-      <el-input v-model="keyword" placeholder="搜索项目名称/负责人/描述" clearable style="max-width: 320px" />
-      <el-button type="primary" @click="loadData" :loading="loading">查询</el-button>
-      <el-button v-if="canCreate" type="success" @click="openCreate">新建项目</el-button>
-    </div>
+    <!-- 搜索条件传送到header -->
+    <Teleport to=".header-center">
+      <div class="header-search">
+        <el-input v-model="keyword" placeholder="搜索项目名称/负责人/描述" clearable style="max-width: 250px" />
+        <el-button type="primary" @click="loadData" :loading="loading">查询</el-button>
+        <el-button v-if="canCreate" type="success" @click="openCreate">新建项目</el-button>
+      </div>
+    </Teleport>
 
     <el-table :data="items" v-loading="loading" size="small" border>
       <el-table-column prop="id" label="ID" width="50" />
@@ -484,7 +487,11 @@ const handleDelete = async (row) => {
 
 <style scoped>
 .page { padding: 16px; }
-.toolbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+.header-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
 .attachment-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .attachment-row { display: flex; align-items: center; gap: 8px; }

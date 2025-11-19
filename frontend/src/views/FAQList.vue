@@ -1,39 +1,42 @@
 <template>
   <div class="page">
-    <div class="toolbar">
-      <el-input 
-        v-model="searchForm.keyword" 
-        placeholder="搜索标题或简要描述" 
-        clearable 
-        style="max-width: 270px" 
-        @keyup.enter="loadData"
-      />
-      <el-select 
-        v-model="searchForm.document_type" 
-        placeholder="文档类型" 
-        clearable 
-        style="width: 120px"
-      >
-        <el-option label="PDF" value="pdf" />
-        <el-option label="图片" value="image" />
-      </el-select>
-      <el-select 
-        v-model="searchForm.module" 
-        placeholder="模块" 
-        clearable 
-        style="width: 150px"
-      >
-        <el-option 
-          v-for="module in moduleOptions" 
-          :key="module.value" 
-          :label="module.label" 
-          :value="module.value" 
+    <!-- 搜索条件传送到header -->
+    <Teleport to=".header-center">
+      <div class="header-search">
+        <el-input 
+          v-model="searchForm.keyword" 
+          placeholder="搜索标题或简要描述" 
+          clearable 
+          style="max-width: 250px" 
+          @keyup.enter="loadData"
         />
-      </el-select>
-      <el-button type="primary" @click="loadData" :loading="loading">查询</el-button>
-      <el-button type="success" @click="openCreate">新建常见问题</el-button>
-    </div>
-
+        <el-select 
+          v-model="searchForm.document_type" 
+          placeholder="文档类型" 
+          clearable 
+          style="width: 120px"
+        >
+          <el-option label="PDF" value="pdf" />
+          <el-option label="图片" value="image" />
+        </el-select>
+        <el-select 
+          v-model="searchForm.module" 
+          placeholder="模块" 
+          clearable 
+          style="width: 150px"
+        >
+          <el-option 
+            v-for="module in moduleOptions" 
+            :key="module.value" 
+            :label="module.label" 
+            :value="module.value" 
+          />
+        </el-select>
+        <el-button type="primary" @click="loadData" :loading="loading">查询</el-button>
+        <el-button type="success" @click="openCreate">新建常见问题</el-button>
+      </div>
+    </Teleport>
+    
     <div class="content-layout">
       <!-- 左侧常见问题列表 -->
       <div class="left-panel">
@@ -789,6 +792,12 @@ onMounted(async () => {
   height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
+}
+
+.header-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .toolbar {
