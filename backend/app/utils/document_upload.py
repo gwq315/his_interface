@@ -26,7 +26,7 @@ ALLOWED_PDF_EXTENSIONS = {".pdf"}
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 
 # 最大文件大小（50MB）
-MAX_FILE_SIZE = 50 * 1024 * 1024
+MAX_FILE_SIZE = 1000 * 1024 * 1024
 
 
 def ensure_upload_dir(document_id: Optional[int] = None) -> Path:
