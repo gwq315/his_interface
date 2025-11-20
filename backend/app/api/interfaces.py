@@ -440,10 +440,73 @@ def update_interface_endpoint(
     if not check_resource_permission(interface.creator_id, current_user, db, allow_read=False):
         raise HTTPException(status_code=403, detail="无权操作此接口")
     
-    interface = update_interface(db, interface_id, interface_update)
-    if not interface:
+    db_interface = update_interface(db, interface_id, interface_update)
+    if not db_interface:
         raise HTTPException(status_code=404, detail="接口不存在")
-    return interface
+    
+    # 手动构建响应对象，避免自动序列化关联关系时出错（特别是project.attachments字段）
+    try:
+        # 使用Parameter schema构建参数列表
+        from backend.app.schemas import Parameter
+        parameters_list = []
+        if db_interface.parameters:
+            for param in db_interface.parameters:
+                try:
+                    # 使用Parameter schema创建参数对象
+                    param_data = {
+                        "id": param.id,
+                        "name": param.name,
+                        "field_name": param.field_name,
+                        "data_type": param.data_type,
+                        "param_type": param.param_type,
+                        "required": param.required,
+                        "default_value": param.default_value,
+                        "description": param.description,
+                        "example": param.example,
+                        "order_index": param.order_index,
+                        "dictionary_id": param.dictionary_id,
+                        "created_at": param.created_at,
+                        "updated_at": param.updated_at
+                    }
+                    parameters_list.append(Parameter.model_validate(param_data))
+                except Exception as param_error:
+                    # 如果某个参数序列化失败，记录错误但继续处理其他参数
+                    import logging
+                    logging.warning(f"Error serializing parameter {param.id}: {str(param_error)}")
+                    continue
+        
+        # 构建接口响应对象
+        interface_data = {
+            "id": db_interface.id,
+            "project_id": db_interface.project_id,
+            "name": db_interface.name,
+            "code": db_interface.code,
+            "description": db_interface.description,
+            "interface_type": db_interface.interface_type,
+            "url": db_interface.url,
+            "method": db_interface.method,
+            "category": db_interface.category,
+            "tags": db_interface.tags,
+            "status": db_interface.status,
+            "input_example": getattr(db_interface, "input_example", None),
+            "output_example": getattr(db_interface, "output_example", None),
+            "view_definition": getattr(db_interface, "view_definition", None),
+            "notes": getattr(db_interface, "notes", None),
+            "creator_id": getattr(db_interface, "creator_id", None),
+            "created_at": db_interface.created_at,
+            "updated_at": db_interface.updated_at,
+            "parameters": parameters_list,
+            "project": None,  # 不返回项目详情，避免循环引用和attachments字段序列化问题
+            "dictionaries": []  # 不返回字典列表，避免性能问题
+        }
+        
+        # 使用Pydantic创建响应对象
+        return Interface.model_validate(interface_data)
+    except Exception as e:
+        # 如果序列化失败，记录错误并返回通用错误
+        import logging
+        logging.error(f"Error serializing interface {interface_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"更新接口失败: {str(e)}")
 
 
 @router.delete("/{interface_id}", status_code=204)

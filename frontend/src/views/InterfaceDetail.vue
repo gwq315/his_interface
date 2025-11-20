@@ -34,6 +34,28 @@
           </el-descriptions-item>
         </el-descriptions>
 
+        <!-- 备注说明 -->
+        <div v-if="interfaceData.notes" style="margin-top: 30px;">
+          <h3>备注说明</h3>
+          <div 
+            v-html="interfaceData.notes" 
+            style="padding: 15px; background-color: #f5f7fa; border-radius: 4px; border: 1px solid #e4e7ed;"
+          ></div>
+        </div>
+
+        <!-- 视图定义 -->
+        <div v-if="interfaceData.view_definition" style="margin-top: 30px;">
+          <h3>视图定义</h3>
+          <el-input
+            :model-value="interfaceData.view_definition || ''"
+            type="textarea"
+            :rows="10"
+            readonly
+            placeholder="暂无视图定义"
+            style="font-family: 'Courier New', monospace;"
+          />
+        </div>
+
         <!-- 参数示例 -->
         <div style="margin-top: 30px;">
           <h3>参数示例</h3>
