@@ -84,7 +84,7 @@ def validate_file(file: UploadFile, document_type: str) -> None:
     if hasattr(file, 'size') and file.size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"文件大小超过限制（最大50MB）"
+            detail=f"文件大小超过限制（最大1000MB）"
         )
 
 
@@ -133,7 +133,7 @@ def save_uploaded_file(file: UploadFile, document_type: str, document_id: Option
         if file_size > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=400,
-                detail=f"文件大小超过限制（最大50MB）"
+                detail=f"文件大小超过限制（最大100MB）"
             )
         
         # 保存文件
@@ -205,7 +205,7 @@ def save_image_from_bytes(image_data: bytes, filename: str, document_id: Optiona
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"文件大小超过限制（最大50MB）"
+            detail=f"文件大小超过限制（最大1000MB）"
         )
     
     # 确保上传目录存在
