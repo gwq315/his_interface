@@ -19,7 +19,10 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: apiBaseUrl,
           changeOrigin: true,
-          secure: false
+          secure: false,
+          // 注意：Vite 开发服务器的代理使用 http-proxy-middleware
+          // 它本身没有请求体大小限制，但需要确保后端也支持大文件上传
+          // 后端已在 main.py 中配置了 100MB 的 FormData 限制
         },
         // 开发环境：代理 /uploads 到后端
         '/uploads': {
