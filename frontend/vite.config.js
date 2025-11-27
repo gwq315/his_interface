@@ -20,15 +20,34 @@ export default defineConfig(({ mode }) => {
           target: apiBaseUrl,
           changeOrigin: true,
           secure: false,
-          // 注意：Vite 开发服务器的代理使用 http-proxy-middleware
-          // 它本身没有请求体大小限制，但需要确保后端也支持大文件上传
-          // 后端已在 main.py 中配置了 100MB 的 FormData 限制
+          // 配置代理以支持大文件上传
+          // Vite 使用 http-proxy-middleware
+          configure: (proxy, _options) => {
+            // 监听代理请求，确保大文件可以正常传输
+            proxy.on('proxyReq', (proxyReq, req, _res) => {
+              // 确保 Content-Length 头正确传递
+              if (req.headers['content-length']) {
+                const contentLength = parseInt(req.headers['content-length'], 10)
+                // 允许任意大小的文件（实际限制在后端）
+                if (contentLength > 0) {
+                  proxyReq.setHeader('Content-Length', contentLength)
+                }
+              }
+            })
+            // 监听代理错误
+            proxy.on('error', (err, req, res) => {
+              console.error('代理错误:', err)
+            })
+          },
+          // 增加超时时间，支持大文件上传
+          timeout: 600000, // 10分钟
         },
         // 开发环境：代理 /uploads 到后端
         '/uploads': {
           target: apiBaseUrl,
           changeOrigin: true,
-          secure: false
+          secure: false,
+          timeout: 600000, // 10分钟
         }
       }
     }
