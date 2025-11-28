@@ -351,6 +351,7 @@ import { Upload, Document, Picture, MoreFilled, PictureFilled, ArrowLeft, ArrowR
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import Quill from 'quill'
+// 导入 highlight.js（使用标准导入，Vite 会自动处理）
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css' // 使用 GitHub Dark 主题，也可以选择其他主题
 import { getFAQs, createFAQ, updateFAQ, deleteFAQ, getFAQPreviewUrl, addFAQAttachment, deleteFAQAttachment } from '../api/faqs'

@@ -12,6 +12,23 @@ export default defineConfig(({ mode }) => {
   
   return {
     plugins: [vue()],
+    resolve: {
+      dedupe: ['highlight.js']
+    },
+    optimizeDeps: {
+      include: ['highlight.js']
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: undefined
+        }
+      },
+      commonjsOptions: {
+        include: [/highlight\.js/, /node_modules/],
+        transformMixedEsModules: true
+      }
+    },
     server: {
       host: '0.0.0.0',  // 监听所有网络接口，允许通过局域网IP访问
       port: 5173,
