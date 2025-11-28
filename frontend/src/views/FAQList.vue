@@ -121,7 +121,7 @@
             </div>
             <!-- 富文本类型：显示富文本内容 -->
             <div v-else-if="selectedFAQ.content_type === 'rich_text'" class="rich-text-preview">
-              <div class="rich-content" v-html="selectedFAQ.rich_content || ''"></div>
+              <div class="rich-content" ref="richContentRef" v-html="highlightedContent"></div>
             </div>
             <!-- 向后兼容：图片预览（旧数据） -->
             <div v-else-if="selectedFAQ.document_type === 'image'" class="image-preview">
@@ -345,13 +345,22 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox, ElImageViewer } from 'element-plus'
 import { Upload, Document, Picture, MoreFilled, PictureFilled, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
+import Quill from 'quill'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github-dark.css' // 使用 GitHub Dark 主题，也可以选择其他主题
 import { getFAQs, createFAQ, updateFAQ, deleteFAQ, getFAQPreviewUrl, addFAQAttachment, deleteFAQAttachment } from '../api/faqs'
 import { dictionaryApi } from '../api/dictionaries'
+
+// 注意：Quill 2.0 默认支持自定义字号，直接在工具栏配置中指定即可
+// 如果需要使用像素值，需要注册自定义 Size 格式化器
+const Size = Quill.import('attributors/style/size')
+Size.whitelist = ['10px', '12px', '14px', '16px', '18px', '20px', '24px', '28px', '32px', '36px', '48px']
+Quill.register(Size, true)
 
 const loading = ref(false)
 const items = ref([])
@@ -383,18 +392,77 @@ const form = reactive({
   attachments: [] // 附件列表（用于编辑）
 })
 
+// 预设颜色选项（常用颜色）
+const colorOptions = [
+  '#000000', // 黑色
+  '#333333', // 深灰色
+  '#666666', // 灰色
+  '#999999', // 浅灰色
+  '#ffffff', // 白色
+  '#ff0000', // 红色
+  '#ff6600', // 橙色
+  '#ff9900', // 橙黄色
+  '#ffcc00', // 黄色
+  '#99cc00', // 黄绿色
+  '#66cc00', // 绿色
+  '#00cc66', // 青绿色
+  '#00cccc', // 青色
+  '#0066cc', // 蓝色
+  '#3366ff', // 亮蓝色
+  '#6600cc', // 紫色
+  '#cc00cc', // 紫红色
+  '#ff0066', // 粉红色
+]
+
+// 预设背景颜色选项
+const backgroundOptions = [
+  '#ffffff', // 白色
+  '#f5f5f5', // 浅灰
+  '#e6e6e6', // 灰色
+  '#ffcccc', // 浅红
+  '#ccffcc', // 浅绿
+  '#ccccff', // 浅蓝
+  '#ffffcc', // 浅黄
+  '#ffccff', // 浅紫
+  '#ccffff', // 浅青
+  '#000000', // 黑色
+  '#ff0000', // 红色
+  '#00ff00', // 绿色
+  '#0000ff', // 蓝色
+  '#ffff00', // 黄色
+  '#ff00ff', // 紫色
+  '#00ffff', // 青色
+]
+
 // 富文本编辑器配置
 const editorOptions = {
   theme: 'snow',
   modules: {
     toolbar: [
+      // 标题级别（1-6级，false表示普通文本）
       [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+      // 字号大小（使用默认选项，如果需要自定义像素值，需要确保 Size 格式化器正确注册）
+      [{ 'size': ['small', false, 'large', 'huge'] }],
+      // 字体样式
       ['bold', 'italic', 'underline', 'strike'],
+      // 字体颜色和背景色（使用空数组显示完整的颜色选择器）
       [{ 'color': [] }, { 'background': [] }],
+      // 列表（有序和无序）
       [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      // 文本对齐（左、中、右、两端对齐）
       [{ 'align': [] }],
+      // 链接和图片
       ['link', 'image'],
+      // 引用块和代码块（支持语法高亮）
+      ['blockquote', 'code-block'],
+      // 清除格式
       ['clean']
+      // 其他可选工具栏选项（已注释，可根据需要启用）：
+      // [{ 'font': [] }],           // 字体系列
+      // ['video'],                   // 视频
+      // [{ 'script': 'sub'}, { 'script': 'super' }], // 上标和下标
+      // [{ 'indent': '-1'}, { 'indent': '+1' }],     // 缩进
+      // [{ 'direction': 'rtl' }],    // 文字方向（从右到左）
     ]
   }
 }
@@ -408,6 +476,62 @@ const dialog = reactive({
 const selectedFAQ = ref(null)
 const uploadRef = ref(null)
 const editUploadRef = ref(null)
+const richContentRef = ref(null)
+const highlightedContent = ref('')
+
+// 对代码块应用语法高亮
+function highlightCodeBlocks(html) {
+  if (!html) return ''
+  
+  // 创建一个临时 DOM 元素来解析 HTML
+  const tempDiv = document.createElement('div')
+  tempDiv.innerHTML = html
+  
+  // 查找所有代码块
+  const codeBlocks = tempDiv.querySelectorAll('pre code, code')
+  
+  codeBlocks.forEach((code) => {
+    // 如果代码块已经有高亮类，跳过
+    if (code.classList.contains('hljs')) return
+    
+    const codeText = code.textContent || code.innerText
+    const language = code.className.match(/language-(\w+)/)?.[1] || 'plaintext'
+    
+    try {
+      // 使用 highlight.js 进行语法高亮
+      const highlighted = hljs.highlight(codeText, { 
+        language: language === 'plaintext' ? 'plaintext' : language 
+      })
+      code.innerHTML = highlighted.value
+      code.classList.add('hljs')
+      if (language !== 'plaintext') {
+        code.classList.add(`language-${language}`)
+      }
+    } catch (e) {
+      // 如果高亮失败，使用纯文本模式
+      try {
+        const highlighted = hljs.highlightAuto(codeText)
+        code.innerHTML = highlighted.value
+        code.classList.add('hljs')
+      } catch (e2) {
+        // 如果还是失败，保持原样
+        console.warn('Syntax highlighting failed:', e2)
+      }
+    }
+  })
+  
+  return tempDiv.innerHTML
+}
+
+// 监听选中常见问题的变化，应用语法高亮
+watch(selectedFAQ, async (newVal) => {
+  if (newVal && newVal.content_type === 'rich_text' && newVal.rich_content) {
+    await nextTick()
+    highlightedContent.value = highlightCodeBlocks(newVal.rich_content)
+  } else {
+    highlightedContent.value = newVal?.rich_content || ''
+  }
+}, { immediate: true })
 
 // 加载模块字典
 async function loadModuleOptions() {
@@ -1114,6 +1238,93 @@ onMounted(async () => {
   padding-left: 15px;
   margin: 10px 0;
   color: #606266;
+}
+
+/* 代码块样式 */
+.rich-content :deep(pre) {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 16px;
+  margin: 16px 0;
+  overflow-x: auto;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.rich-content :deep(pre code) {
+  background: transparent;
+  padding: 0;
+  border: none;
+  font-size: inherit;
+  color: inherit;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+.rich-content :deep(code) {
+  background: #f6f8fa;
+  border: 1px solid #d1d9e0;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 85%;
+  color: #e83e8c;
+}
+
+.rich-content :deep(pre code) {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #c9d1d9;
+}
+
+/* highlight.js 样式覆盖 */
+.rich-content :deep(.hljs) {
+  display: block;
+  overflow-x: auto;
+  padding: 0;
+  background: transparent;
+}
+
+.rich-content :deep(.hljs-keyword),
+.rich-content :deep(.hljs-selector-tag),
+.rich-content :deep(.hljs-built_in),
+.rich-content :deep(.hljs-name),
+.rich-content :deep(.hljs-tag) {
+  color: #ff7b72;
+}
+
+.rich-content :deep(.hljs-string),
+.rich-content :deep(.hljs-title),
+.rich-content :deep(.hljs-section),
+.rich-content :deep(.hljs-attribute),
+.rich-content :deep(.hljs-literal),
+.rich-content :deep(.hljs-template-tag),
+.rich-content :deep(.hljs-template-variable),
+.rich-content :deep(.hljs-type),
+.rich-content :deep(.hljs-addition) {
+  color: #a5d6ff;
+}
+
+.rich-content :deep(.hljs-comment),
+.rich-content :deep(.hljs-quote),
+.rich-content :deep(.hljs-deletion),
+.rich-content :deep(.hljs-meta) {
+  color: #8b949e;
+}
+
+.rich-content :deep(.hljs-number),
+.rich-content :deep(.hljs-regexp),
+.rich-content :deep(.hljs-symbol),
+.rich-content :deep(.hljs-variable) {
+  color: #79c0ff;
+}
+
+.rich-content :deep(.hljs-function),
+.rich-content :deep(.hljs-title.function_) {
+  color: #d2a8ff;
 }
 
 /* 富文本编辑器样式 */
