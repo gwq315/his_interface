@@ -351,9 +351,8 @@ import { Upload, Document, Picture, MoreFilled, PictureFilled, ArrowLeft, ArrowR
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import Quill from 'quill'
-// 导入 highlight.js（使用标准导入，Vite 会自动处理）
-import hljs from 'highlight.js'
-import 'highlight.js/styles/github-dark.css' // 使用 GitHub Dark 主题，也可以选择其他主题
+// 动态导入 highlight.js 和样式文件以避免构建时的模块解析问题
+// CSS 文件将在运行时动态加载
 import { getFAQs, createFAQ, updateFAQ, deleteFAQ, getFAQPreviewUrl, addFAQAttachment, deleteFAQAttachment } from '../api/faqs'
 import { dictionaryApi } from '../api/dictionaries'
 
@@ -480,9 +479,90 @@ const editUploadRef = ref(null)
 const richContentRef = ref(null)
 const highlightedContent = ref('')
 
-// 对代码块应用语法高亮
-function highlightCodeBlocks(html) {
+// 动态加载 highlight.js 样式（只加载一次，使用本地文件）
+let highlightStyleLoaded = false
+function loadHighlightStyle() {
+  if (highlightStyleLoaded) return
+  
+  // 使用本地文件加载样式，避免依赖外部 CDN
+  if (!document.querySelector('link[href*="highlight-github"]')) {
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    // 使用本地文件路径（Vite 会将 public 目录下的文件复制到构建输出根目录）
+    link.href = '/highlight-github.css'
+    document.head.appendChild(link)
+    highlightStyleLoaded = true
+  }
+}
+
+// 动态加载 highlight.js（使用 CDN，避免构建时解析）
+let highlightJsLoaded = false
+let hljs = null
+
+async function loadHighlightJs() {
+  if (highlightJsLoaded && hljs) return hljs
+  
+  // 如果 window.hljs 已存在（通过 CDN 加载），直接使用
+  if (typeof window !== 'undefined' && window.hljs) {
+    hljs = window.hljs
+    highlightJsLoaded = true
+    return hljs
+  }
+  
+  // 尝试通过 CDN 加载
+  return new Promise((resolve, reject) => {
+    // 检查是否已经加载了 script
+    if (document.querySelector('script[src*="highlight.js"]')) {
+      // 等待加载完成
+      const checkInterval = setInterval(() => {
+        if (window.hljs) {
+          clearInterval(checkInterval)
+          hljs = window.hljs
+          highlightJsLoaded = true
+          resolve(hljs)
+        }
+      }, 100)
+      setTimeout(() => {
+        clearInterval(checkInterval)
+        reject(new Error('Timeout loading highlight.js'))
+      }, 5000)
+      return
+    }
+    
+    // 创建 script 标签加载 highlight.js
+    const script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js'
+    script.crossOrigin = 'anonymous'
+    script.onload = () => {
+      hljs = window.hljs
+      highlightJsLoaded = true
+      resolve(hljs)
+    }
+    script.onerror = () => {
+      reject(new Error('Failed to load highlight.js from CDN'))
+    }
+    document.head.appendChild(script)
+  })
+}
+
+// 对代码块应用语法高亮（使用 CDN 加载）
+async function highlightCodeBlocks(html) {
   if (!html) return ''
+  
+  // 确保样式和库已加载
+  loadHighlightStyle()
+  
+  // 加载 highlight.js
+  try {
+    await loadHighlightJs()
+  } catch (e) {
+    console.warn('Failed to load highlight.js:', e)
+    return html // 如果加载失败，返回原始 HTML
+  }
+  
+  if (!hljs) {
+    return html
+  }
   
   // 创建一个临时 DOM 元素来解析 HTML
   const tempDiv = document.createElement('div')
@@ -528,7 +608,7 @@ function highlightCodeBlocks(html) {
 watch(selectedFAQ, async (newVal) => {
   if (newVal && newVal.content_type === 'rich_text' && newVal.rich_content) {
     await nextTick()
-    highlightedContent.value = highlightCodeBlocks(newVal.rich_content)
+    highlightedContent.value = await highlightCodeBlocks(newVal.rich_content)
   } else {
     highlightedContent.value = newVal?.rich_content || ''
   }
@@ -1241,10 +1321,10 @@ onMounted(async () => {
   color: #606266;
 }
 
-/* 代码块样式 */
+/* 代码块样式 - 使用更亮的背景和更高对比度的颜色 */
 .rich-content :deep(pre) {
-  background: #0d1117;
-  border: 1px solid #30363d;
+  background: #f6f8fa !important;
+  border: 1px solid #d1d9e0;
   border-radius: 6px;
   padding: 16px;
   margin: 16px 0;
@@ -1255,11 +1335,11 @@ onMounted(async () => {
 }
 
 .rich-content :deep(pre code) {
-  background: transparent;
+  background: transparent !important;
   padding: 0;
   border: none;
   font-size: inherit;
-  color: inherit;
+  color: #24292e !important;
   white-space: pre;
   word-wrap: normal;
 }
@@ -1274,29 +1354,26 @@ onMounted(async () => {
   color: #e83e8c;
 }
 
-.rich-content :deep(pre code) {
-  background: transparent;
-  border: none;
-  padding: 0;
-  color: #c9d1d9;
-}
-
-/* highlight.js 样式覆盖 */
+/* highlight.js 样式覆盖 - 提高对比度 */
 .rich-content :deep(.hljs) {
   display: block;
   overflow-x: auto;
   padding: 0;
-  background: transparent;
+  background: #f6f8fa !important;
+  color: #24292e !important;
 }
 
+/* 关键字 - 使用深色提高对比度 */
 .rich-content :deep(.hljs-keyword),
 .rich-content :deep(.hljs-selector-tag),
 .rich-content :deep(.hljs-built_in),
 .rich-content :deep(.hljs-name),
 .rich-content :deep(.hljs-tag) {
-  color: #ff7b72;
+  color: #d73a49 !important; /* 深红色，高对比度 */
+  font-weight: 600;
 }
 
+/* 字符串 - 使用深绿色 */
 .rich-content :deep(.hljs-string),
 .rich-content :deep(.hljs-title),
 .rich-content :deep(.hljs-section),
@@ -1306,26 +1383,42 @@ onMounted(async () => {
 .rich-content :deep(.hljs-template-variable),
 .rich-content :deep(.hljs-type),
 .rich-content :deep(.hljs-addition) {
-  color: #a5d6ff;
+  color: #032f62 !important; /* 深蓝色，高对比度 */
 }
 
+/* 注释 - 使用灰色但保持可读性 */
 .rich-content :deep(.hljs-comment),
 .rich-content :deep(.hljs-quote),
 .rich-content :deep(.hljs-deletion),
 .rich-content :deep(.hljs-meta) {
-  color: #8b949e;
+  color: #6a737d !important; /* 中等灰色，保持对比度 */
+  font-style: italic;
 }
 
+/* 数字和变量 - 使用深紫色 */
 .rich-content :deep(.hljs-number),
 .rich-content :deep(.hljs-regexp),
 .rich-content :deep(.hljs-symbol),
 .rich-content :deep(.hljs-variable) {
-  color: #79c0ff;
+  color: #005cc5 !important; /* 深蓝色，高对比度 */
 }
 
+/* 函数 - 使用深蓝色 */
 .rich-content :deep(.hljs-function),
 .rich-content :deep(.hljs-title.function_) {
-  color: #d2a8ff;
+  color: #6f42c1 !important; /* 深紫色，高对比度 */
+  font-weight: 600;
+}
+
+/* 类名和属性名 */
+.rich-content :deep(.hljs-class .hljs-title),
+.rich-content :deep(.hljs-attr) {
+  color: #e36209 !important; /* 深橙色，高对比度 */
+}
+
+/* 操作符 */
+.rich-content :deep(.hljs-operator) {
+  color: #d73a49 !important; /* 深红色 */
 }
 
 /* 富文本编辑器样式 */

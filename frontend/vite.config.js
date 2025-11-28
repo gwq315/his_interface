@@ -22,7 +22,9 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: undefined
-        }
+        },
+        // 将 highlight.js 标记为外部依赖，避免构建时解析
+        external: ['highlight.js']
       },
       commonjsOptions: {
         include: [/highlight\.js/, /node_modules/],
